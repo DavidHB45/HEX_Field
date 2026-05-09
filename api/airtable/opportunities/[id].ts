@@ -12,7 +12,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const token = await getTokenFromCookie(req.headers['cookie']);
+  const token = getTokenFromCookie(req.headers['cookie']);
   if (!token) {
     return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
   }

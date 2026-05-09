@@ -1,8 +1,7 @@
-import { sealData, unsealData } from 'iron-session';
+import { sealCookie, unsealCookie } from '../../_lib/cookieCrypto';
 
 const PKCE_COOKIE = 'at_pkce';
 const TOKEN_COOKIE = 'at_token';
-const SESSION_SECRET = process.env.SESSION_SECRET ?? '';
 
 interface PkceData {
   codeVerifier: string;
@@ -34,6 +33,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const { code, state, error } = req.query as Record<string, string>;
+  const secret = process.env.SESSION_SECRET ?? '';
 
   if (error) {
     return res.redirect(`/?auth_error=${encodeURIComponent(error)}`);
@@ -47,23 +47,23 @@ export default async function handler(req: any, res: any) {
   const sealedPkce = cookies[PKCE_COOKIE];
 
   if (!sealedPkce) {
-    return res.status(400).json({ error: 'Missing PKCE cookie — please try signing in again' });
+    return res.redirect('/?auth_error=missing_pkce');
   }
 
   let pkce: PkceData;
   try {
-    pkce = await unsealData<PkceData>(sealedPkce, { password: SESSION_SECRET });
+    pkce = unsealCookie<PkceData>(sealedPkce, secret);
   } catch {
-    return res.status(400).json({ error: 'Invalid PKCE cookie' });
+    return res.redirect('/?auth_error=invalid_pkce');
   }
 
   if (pkce.state !== state) {
-    return res.status(400).json({ error: 'State mismatch — possible CSRF' });
+    return res.redirect('/?auth_error=state_mismatch');
   }
 
-  const clientId = process.env.AIRTABLE_CLIENT_ID!;
-  const clientSecret = process.env.AIRTABLE_CLIENT_SECRET!;
-  const redirectUri = process.env.AIRTABLE_REDIRECT_URI!;
+  const clientId = process.env.AIRTABLE_CLIENT_ID ?? '';
+  const clientSecret = process.env.AIRTABLE_CLIENT_SECRET ?? '';
+  const redirectUri = process.env.AIRTABLE_REDIRECT_URI ?? '';
 
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -87,23 +87,21 @@ export default async function handler(req: any, res: any) {
   if (!tokenRes.ok) {
     const detail = await tokenRes.text();
     console.error('Airtable token exchange failed:', detail);
-    return res.redirect(`/?auth_error=${encodeURIComponent('Token exchange failed')}`);
+    return res.redirect(`/?auth_error=${encodeURIComponent('token_exchange_failed')}`);
   }
 
   const tokens: AirtableTokenResponse = await tokenRes.json();
   const expiresAt = Date.now() + tokens.expires_in * 1000;
 
-  const sealedToken = await sealData(
+  const sealedToken = sealCookie(
     { accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt },
-    { password: SESSION_SECRET, ttl: 0 } // managed via cookie Max-Age
+    secret
   );
 
-  const maxAge = 60 * 24 * 60 * 60; // 60 days (refresh token lifetime)
+  const maxAge = 60 * 24 * 60 * 60; // 60 days
 
   res.setHeader('Set-Cookie', [
-    // Clear the PKCE cookie
     `${PKCE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-    // Store the sealed token
     `${TOKEN_COOKIE}=${sealedToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
   ]);
 

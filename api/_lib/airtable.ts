@@ -1,7 +1,6 @@
 // SERVER-SIDE ONLY — imported by /api routes, never by the React frontend.
-import { unsealData } from 'iron-session';
+import { unsealCookie } from './cookieCrypto';
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? '';
 const TOKEN_COOKIE = 'at_token';
 const BASE_URL = 'https://api.airtable.com/v0';
 
@@ -36,13 +35,14 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
   );
 }
 
-export async function getTokenFromCookie(cookieHeader: string | undefined): Promise<string | null> {
+export function getTokenFromCookie(cookieHeader: string | undefined): string | null {
+  const secret = process.env.SESSION_SECRET ?? '';
   const cookies = parseCookies(cookieHeader);
   const sealed = cookies[TOKEN_COOKIE];
   if (!sealed) return null;
 
   try {
-    const data = await unsealData<StoredToken>(sealed, { password: SESSION_SECRET });
+    const data = unsealCookie<StoredToken>(sealed, secret);
     // Simple expiry check — token refresh is Phase 8
     if (Date.now() > data.expiresAt) return null;
     return data.accessToken;
