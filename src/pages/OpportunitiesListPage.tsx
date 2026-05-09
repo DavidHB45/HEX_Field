@@ -6,7 +6,7 @@ import { C } from '../theme';
 interface Opportunity {
   id: string;
   fields: {
-    Name?: string;
+    'Opportunity Name'?: string;
     Client?: string;
     Address?: string;
     Status?: string;
