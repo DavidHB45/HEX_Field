@@ -1,8 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
-import { sealData } from 'iron-session';
+import { sealCookie } from '../../_lib/cookieCrypto';
 
 const COOKIE_NAME = 'at_pkce';
-const SESSION_SECRET = process.env.SESSION_SECRET ?? '';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
@@ -12,6 +11,7 @@ export default async function handler(req: any, res: any) {
 
   const clientId = process.env.AIRTABLE_CLIENT_ID;
   const redirectUri = process.env.AIRTABLE_REDIRECT_URI;
+  const secret = process.env.SESSION_SECRET ?? '';
 
   if (!clientId || !redirectUri) {
     return res.status(500).json({ error: 'Airtable OAuth not configured' });
@@ -22,11 +22,7 @@ export default async function handler(req: any, res: any) {
   const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
   const state = randomBytes(16).toString('hex');
 
-  // Seal the verifier + state in a short-lived cookie so the callback can read them
-  const sealed = await sealData(
-    { codeVerifier, state },
-    { password: SESSION_SECRET, ttl: 600 } // 10 min
-  );
+  const sealed = sealCookie({ codeVerifier, state }, secret);
 
   res.setHeader('Set-Cookie', [
     `${COOKIE_NAME}=${sealed}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,

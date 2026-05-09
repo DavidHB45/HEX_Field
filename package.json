@@ -2,7 +2,6 @@
   "name": "harris-job-walk",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,7 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "iron-session": "^8.0.4",
     "lucide-react": "^0.372.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
