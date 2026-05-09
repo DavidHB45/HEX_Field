@@ -295,12 +295,12 @@ export function OpportunityDetailPage() {
       })
         .then(async (res) => {
           if (!res.ok) {
-            const body = await res.json() as { error?: string; code?: string };
+            const body = await res.json() as { error?: string; code?: string; detail?: string };
             if (body.code === 'UNAUTHENTICATED') {
               setDropboxAuthRequired(true);
               return;
             }
-            throw new Error(body.error ?? `HTTP ${res.status}`);
+            throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
           }
           const data = await res.json() as { folderUrl: string };
           // Write the URL back to Airtable

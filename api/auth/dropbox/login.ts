@@ -34,6 +34,7 @@ export default function handler(req: any, res: any) {
     response_type: 'code',
     state,
     token_access_type: 'offline',
+    scope: 'files.content.write files.content.read sharing.write',
   });
 
   return res.redirect(`https://www.dropbox.com/oauth2/authorize?${params}`);
