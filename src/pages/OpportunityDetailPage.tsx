@@ -3,11 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Pencil, Ruler, Mic, FolderOpen, MapPin, type LucideIcon } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { C } from '../theme';
+import type { DropboxFolderStats } from '../lib/dropbox';
 
 interface Opportunity {
   id: string;
   fields: {
-    Name?: string;
+    'Opportunity Name'?: string;
     Client?: string;
     Address?: string;
     Status?: string;
@@ -46,10 +47,43 @@ function DetailRow({ label, value }: { label: string; value: string | number | u
   );
 }
 
-function OverviewTab({ opp }: { opp: Opportunity }) {
+function FolderStatLine({
+  label,
+  count,
+  exists,
+}: {
+  label: string;
+  count?: number;
+  exists?: boolean;
+}) {
+  const suffix = count !== undefined ? ` (${count})` : exists !== undefined ? (exists ? ' ✓' : '') : '';
+  return (
+    <div style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace', marginLeft: 28 }}>
+      {label}{suffix}
+    </div>
+  );
+}
+
+function OverviewTab({
+  opp,
+  folderCreating,
+  folderError,
+  stats,
+}: {
+  opp: Opportunity;
+  folderCreating: boolean;
+  folderError: string | null;
+  stats: DropboxFolderStats | null;
+}) {
   const f = opp.fields;
+  const oppName = f['Opportunity Name'] ?? opp.id;
+  const rootLabel = (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities')
+    .replace(/^\//, '')
+    .replace(/\/$/, '');
+
   return (
     <div style={{ padding: 16 }}>
+      {/* Dropbox folder card */}
       <div
         style={{
           background: C.cream,
@@ -71,24 +105,42 @@ function OverviewTab({ opp }: { opp: Opportunity }) {
         >
           Dropbox Folder
         </div>
-        <div style={{ fontSize: 13, color: C.text, fontFamily: 'monospace', marginBottom: 4 }}>
-          Current Opportunities/
-        </div>
-        <div style={{ fontSize: 13, color: C.text, fontFamily: 'monospace', marginLeft: 12 }}>
-          └── {f['Opportunity Name'] ?? opp.id}/
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace', marginLeft: 28, marginTop: 4 }}>
-          ├── Photos/ ({f['Photos Count'] ?? 0})
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace', marginLeft: 28 }}>
-          ├── Sketches/
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace', marginLeft: 28 }}>
-          ├── measurements.md
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace', marginLeft: 28 }}>
-          └── site-notes.md
-        </div>
+
+        {folderCreating && (
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>
+            Creating folder structure…
+          </div>
+        )}
+
+        {!folderCreating && folderError && (
+          <div style={{ fontSize: 13, color: C.red, marginBottom: 8 }}>
+            {folderError}
+          </div>
+        )}
+
+        {!folderCreating && (
+          <>
+            <div style={{ fontSize: 13, color: C.text, fontFamily: 'monospace', marginBottom: 4 }}>
+              {rootLabel}/
+            </div>
+            <div style={{ fontSize: 13, color: C.text, fontFamily: 'monospace', marginLeft: 12 }}>
+              └── {oppName}/
+            </div>
+            <FolderStatLine
+              label="├── Photos/"
+              count={stats?.photos ?? f['Photos Count'] ?? 0}
+            />
+            <FolderStatLine label="├── Sketches/" count={stats?.sketches ?? 0} />
+            <FolderStatLine
+              label="├── measurements.md"
+              exists={stats?.measurementsExists}
+            />
+            <FolderStatLine
+              label="└── site-notes.md"
+              exists={stats?.notesExists}
+            />
+          </>
+        )}
 
         {f['Dropbox Folder URL'] && (
           <a
@@ -109,6 +161,7 @@ function OverviewTab({ opp }: { opp: Opportunity }) {
         )}
       </div>
 
+      {/* Opportunity details card */}
       <div
         style={{
           background: C.white,
@@ -177,10 +230,13 @@ export function OpportunityDetailPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [opp, setOpp] = useState<Opportunity | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [folderCreating, setFolderCreating] = useState(false);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [stats, setStats] = useState<DropboxFolderStats | null>(null);
 
+  // Load the opportunity record
   useEffect(() => {
     if (!id) return;
-    // We pull the full list and find our record — avoids a separate get-by-id endpoint for now.
     fetch('/api/airtable/opportunities')
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -194,6 +250,57 @@ export function OpportunityDetailPage() {
       })
       .catch(() => setLoadError(true));
   }, [id]);
+
+  // Auto-create Dropbox folder when opp loads without one, then fetch stats
+  useEffect(() => {
+    if (!opp) return;
+    const oppName = opp.fields['Opportunity Name'];
+    if (!oppName) return;
+
+    if (!opp.fields['Dropbox Folder URL']) {
+      setFolderCreating(true);
+      setFolderError(null);
+
+      fetch('/api/dropbox/folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opportunityName: oppName }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = await res.json() as { error?: string };
+            throw new Error(body.error ?? `HTTP ${res.status}`);
+          }
+          const data = await res.json() as { folderUrl: string };
+          // Write the URL back to Airtable
+          await fetch(`/api/airtable/opportunities/${opp.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { 'Dropbox Folder URL': data.folderUrl } }),
+          });
+          setOpp((prev) =>
+            prev
+              ? { ...prev, fields: { ...prev.fields, 'Dropbox Folder URL': data.folderUrl } }
+              : prev
+          );
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setFolderError(`Could not create Dropbox folder: ${message}`);
+        })
+        .finally(() => setFolderCreating(false));
+    }
+
+    // Fetch live folder stats
+    const params = new URLSearchParams({ opportunityName: oppName });
+    fetch(`/api/dropbox/folder-stats?${params}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json() as DropboxFolderStats;
+        setStats(data);
+      })
+      .catch(() => { /* stats are best-effort */ });
+  }, [opp?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const title = opp?.fields['Opportunity Name'] ?? 'Opportunity';
   const subtitle = opp?.fields.Client;
@@ -263,7 +370,14 @@ export function OpportunityDetailPage() {
 
       {opp && (
         <>
-          {activeTab === 'overview' && <OverviewTab opp={opp} />}
+          {activeTab === 'overview' && (
+            <OverviewTab
+              opp={opp}
+              folderCreating={folderCreating}
+              folderError={folderError}
+              stats={stats}
+            />
+          )}
           {activeTab === 'photos' && <PlaceholderTab label="Photos" />}
           {activeTab === 'sketches' && <PlaceholderTab label="Sketches" />}
           {activeTab === 'measure' && <PlaceholderTab label="Measurements" />}
