@@ -27,7 +27,7 @@ export default function handler(req: any, res: any) {
   const state = randomBytes(16).toString('hex');
 
   res.setHeader('Set-Cookie', [
-    `${PKCE_COOKIE}=${sealCookie({ codeVerifier, state }, secret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+    `${PKCE_COOKIE}=${sealCookie({ codeVerifier, state }, secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,
   ]);
 
   const params = new URLSearchParams({
