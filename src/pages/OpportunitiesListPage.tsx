@@ -76,9 +76,15 @@ export function OpportunitiesListPage() {
               }}
             />
             <input
+              type="search"
+              inputMode="search"
               placeholder="Search opportunities..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               style={{
                 width: '100%',
                 padding: '10px 12px 10px 36px',
@@ -86,7 +92,7 @@ export function OpportunitiesListPage() {
                 border: 'none',
                 background: C.white,
                 color: C.text,
-                fontSize: 14,
+                fontSize: 16,
               }}
             />
           </div>
