@@ -2,10 +2,6 @@ import { createHash, createDecipheriv } from 'crypto';
 
 const TOKEN_COOKIE = 'db_token';
 
-function buildRoot(): string {
-  return ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
-}
-
 async function readErrorBody(r: Response): Promise<{ error_summary?: string }> {
   const text = await r.text();
   try { return JSON.parse(text) as { error_summary?: string }; }
@@ -59,7 +55,7 @@ export default async function handler(req: any, res: any) {
   if (!opportunityName?.trim()) return res.status(400).json({ error: 'Missing opportunityName' });
 
   const safeName = opportunityName.trim().replace(/\//g, '-');
-  const root = buildRoot();
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
   const folderPath = `${root}/${safeName}/Photos`;
 
   // List the Photos folder
