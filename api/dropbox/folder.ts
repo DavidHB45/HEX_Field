@@ -36,10 +36,16 @@ async function dbPost(token: string, endpoint: string, body: unknown): Promise<R
   });
 }
 
+async function readErrorBody(r: Response): Promise<{ error_summary?: string; error?: unknown }> {
+  const text = await r.text();
+  try { return JSON.parse(text) as { error_summary?: string; error?: unknown }; }
+  catch { return { error_summary: text }; }
+}
+
 async function createFolderIfMissing(token: string, path: string): Promise<void> {
   const r = await dbPost(token, 'files/create_folder_v2', { path, autorename: false });
   if (!r.ok) {
-    const err = await r.json() as { error_summary?: string };
+    const err = await readErrorBody(r);
     if (!err.error_summary?.startsWith('path/conflict')) {
       throw new Error(`create_folder_v2 failed for "${path}": ${JSON.stringify(err)}`);
     }
@@ -57,7 +63,7 @@ async function uploadTextIfMissing(token: string, path: string, content: string)
     body: content,
   });
   if (!r.ok) {
-    const err = await r.json() as { error_summary?: string };
+    const err = await readErrorBody(r);
     if (!err.error_summary?.startsWith('path/conflict')) {
       throw new Error(`upload failed for "${path}": ${JSON.stringify(err)}`);
     }
@@ -73,7 +79,7 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
     const data = await r.json() as { url: string };
     return data.url;
   }
-  const err = await r.json() as {
+  const err = await readErrorBody(r) as {
     error_summary?: string;
     error?: { '.tag': string; metadata?: { url: string } };
   };
