@@ -47,7 +47,7 @@ export function OpportunitiesListPage() {
     const q = search.toLowerCase();
     const f = o.fields;
     return (
-      (f.Name ?? '').toLowerCase().includes(q) ||
+      (f['Opportunity Name'] ?? '').toLowerCase().includes(q) ||
       (f.Client ?? '').toLowerCase().includes(q) ||
       (f.Address ?? '').toLowerCase().includes(q)
     );
@@ -194,7 +194,7 @@ export function OpportunitiesListPage() {
                     }}
                   >
                     <div className="font-display" style={{ fontSize: 16, color: C.navy, lineHeight: 1.2 }}>
-                      {f.Name ?? opp.id}
+                      {f['Opportunity Name'] ?? opp.id}
                     </div>
                     <ChevronRight size={18} color={C.muted} style={{ flexShrink: 0, marginTop: 2 }} />
                   </div>

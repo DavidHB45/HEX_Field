@@ -2,7 +2,7 @@
 export interface AirtableOpportunity {
   id: string;
   fields: {
-    Name?: string;
+    'Opportunity Name'?: string;
     Client?: string;
     Address?: string;
     Status?: string;
