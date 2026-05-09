@@ -5,6 +5,7 @@ import { AppHeader } from '../components/AppHeader';
 import { C } from '../theme';
 import type { DropboxFolderStats } from '../lib/dropbox';
 import { PhotosTab } from './tabs/PhotosTab';
+import { SketchesTab } from './tabs/SketchesTab';
 
 interface Opportunity {
   id: string;
@@ -446,7 +447,12 @@ export function OpportunityDetailPage() {
               }
             />
           )}
-          {activeTab === 'sketches' && <PlaceholderTab label="Sketches" />}
+          {activeTab === 'sketches' && (
+            <SketchesTab
+              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+              dropboxAuthRequired={dropboxAuthRequired}
+            />
+          )}
           {activeTab === 'measure' && <PlaceholderTab label="Measurements" />}
           {activeTab === 'notes' && <PlaceholderTab label="Voice Notes" />}
         </>
