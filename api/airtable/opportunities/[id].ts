@@ -1,4 +1,4 @@
-import { getTokenFromCookie, airtablePatch } from '../../../src/lib/airtable';
+import { getTokenFromCookie, airtablePatch } from '../../_lib/airtable';
 
 const BASE_ID = process.env.AIRTABLE_BASE_ID ?? '';
 const TABLE = process.env.AIRTABLE_OPPORTUNITIES_TABLE ?? 'Project Opportunities';

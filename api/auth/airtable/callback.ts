@@ -1,4 +1,4 @@
-import { unsealData, sealData } from 'iron-session';
+import { sealData, unsealData } from 'iron-session';
 
 const PKCE_COOKIE = 'at_pkce';
 const TOKEN_COOKIE = 'at_token';
