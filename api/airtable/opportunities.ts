@@ -44,7 +44,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const params = new URLSearchParams({
-      filterByFormula: "NOT(OR({Status}='Closed',{Status}='Lost'))",
+      filterByFormula: "{Status}='Lead'",
       'sort[0][field]': 'Opportunity Name',
       'sort[0][direction]': 'asc',
     });
