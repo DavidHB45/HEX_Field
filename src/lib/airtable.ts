@@ -1,3 +1,15 @@
-// Type-only re-export so src/lib/airtable.ts remains a valid reference per CLAUDE.md.
-// Runtime code lives in api/_lib/airtable.ts (server-side only).
-export type { AirtableOpportunity } from '../../api/_lib/airtable';
+// Shared types only — no runtime code. API routes are fully self-contained.
+export interface AirtableOpportunity {
+  id: string;
+  fields: {
+    Name?: string;
+    Client?: string;
+    Address?: string;
+    Status?: string;
+    'Estimated Value'?: string | number;
+    'Last Site Visit'?: string;
+    'Photos Count'?: number;
+    'Dropbox Folder URL'?: string;
+    [key: string]: unknown;
+  };
+}
