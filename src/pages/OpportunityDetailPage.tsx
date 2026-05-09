@@ -75,7 +75,7 @@ function OverviewTab({ opp }: { opp: Opportunity }) {
           Current Opportunities/
         </div>
         <div style={{ fontSize: 13, color: C.text, fontFamily: 'monospace', marginLeft: 12 }}>
-          └── {f.Name ?? opp.id}/
+          └── {f['Opportunity Name'] ?? opp.id}/
         </div>
         <div style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace', marginLeft: 28, marginTop: 4 }}>
           ├── Photos/ ({f['Photos Count'] ?? 0})
@@ -195,7 +195,7 @@ export function OpportunityDetailPage() {
       .catch(() => setLoadError(true));
   }, [id]);
 
-  const title = opp?.fields.Name ?? 'Opportunity';
+  const title = opp?.fields['Opportunity Name'] ?? 'Opportunity';
   const subtitle = opp?.fields.Client;
 
   return (

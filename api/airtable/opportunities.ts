@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
   try {
     const params = new URLSearchParams({
       filterByFormula: "NOT(OR({Status}='Closed',{Status}='Lost'))",
-      'sort[0][field]': 'Name',
+      'sort[0][field]': 'Opportunity Name',
       'sort[0][direction]': 'asc',
     });
     const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE)}?${params}`;
