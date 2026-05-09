@@ -104,6 +104,7 @@ export default async function handler(req: any, res: any) {
   const oppFolder = `${root}/${safeName}`;
 
   try {
+    if (root) await createFolderIfMissing(token, root);
     await createFolderIfMissing(token, oppFolder);
     await createFolderIfMissing(token, `${oppFolder}/Photos`);
     await createFolderIfMissing(token, `${oppFolder}/Sketches`);
