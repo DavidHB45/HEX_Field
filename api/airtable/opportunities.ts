@@ -1,4 +1,4 @@
-import { getTokenFromCookie, airtableGet } from '../_lib/airtable';
+import { getTokenFromCookie, airtableGet } from '../_lib';
 
 const BASE_ID = process.env.AIRTABLE_BASE_ID ?? '';
 const TABLE = process.env.AIRTABLE_OPPORTUNITIES_TABLE ?? 'Project Opportunities';
@@ -14,20 +14,21 @@ export default async function handler(req: any, res: any) {
     return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
   }
 
+  if (!BASE_ID) {
+    console.error('[opportunities] AIRTABLE_BASE_ID is not set');
+    return res.status(500).json({ error: 'Server misconfigured: missing AIRTABLE_BASE_ID' });
+  }
+
   try {
     const params = new URLSearchParams({
-      // Exclude closed/lost records
       filterByFormula: "NOT(OR({Status}='Closed',{Status}='Lost'))",
       'sort[0][field]': 'Name',
       'sort[0][direction]': 'asc',
     });
-
-    const encodedTable = encodeURIComponent(TABLE);
-    const data = await airtableGet(token, `/${BASE_ID}/${encodedTable}?${params}`);
-
+    const data = await airtableGet(token, `/${BASE_ID}/${encodeURIComponent(TABLE)}?${params}`);
     return res.status(200).json(data);
   } catch (err) {
-    console.error('[api/airtable/opportunities]', err);
-    return res.status(500).json({ error: 'Failed to fetch opportunities' });
+    console.error('[opportunities]', err);
+    return res.status(500).json({ error: 'Failed to fetch from Airtable', detail: String(err) });
   }
 }

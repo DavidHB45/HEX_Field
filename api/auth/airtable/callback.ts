@@ -1,4 +1,4 @@
-import { sealCookie, unsealCookie } from '../../_lib/cookieCrypto';
+import { sealCookie, unsealCookie, parseCookies } from '../../_lib';
 
 const PKCE_COOKIE = 'at_pkce';
 const TOKEN_COOKIE = 'at_token';
@@ -16,16 +16,6 @@ interface AirtableTokenResponse {
   expires_in: number;
 }
 
-function parseCookies(cookieHeader: string | undefined): Record<string, string> {
-  if (!cookieHeader) return {};
-  return Object.fromEntries(
-    cookieHeader.split(';').map((c) => {
-      const [k, ...v] = c.trim().split('=');
-      return [k.trim(), decodeURIComponent(v.join('='))];
-    })
-  );
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -35,20 +25,13 @@ export default async function handler(req: any, res: any) {
   const { code, state, error } = req.query as Record<string, string>;
   const secret = process.env.SESSION_SECRET ?? '';
 
-  if (error) {
-    return res.redirect(`/?auth_error=${encodeURIComponent(error)}`);
-  }
-
-  if (!code || !state) {
-    return res.status(400).json({ error: 'Missing code or state' });
-  }
+  if (error) return res.redirect(`/?auth_error=${encodeURIComponent(error)}`);
+  if (!code || !state) return res.status(400).json({ error: 'Missing code or state' });
 
   const cookies = parseCookies(req.headers['cookie']);
   const sealedPkce = cookies[PKCE_COOKIE];
 
-  if (!sealedPkce) {
-    return res.redirect('/?auth_error=missing_pkce');
-  }
+  if (!sealedPkce) return res.redirect('/?auth_error=missing_pkce');
 
   let pkce: PkceData;
   try {
@@ -57,21 +40,11 @@ export default async function handler(req: any, res: any) {
     return res.redirect('/?auth_error=invalid_pkce');
   }
 
-  if (pkce.state !== state) {
-    return res.redirect('/?auth_error=state_mismatch');
-  }
+  if (pkce.state !== state) return res.redirect('/?auth_error=state_mismatch');
 
   const clientId = process.env.AIRTABLE_CLIENT_ID ?? '';
   const clientSecret = process.env.AIRTABLE_CLIENT_SECRET ?? '';
   const redirectUri = process.env.AIRTABLE_REDIRECT_URI ?? '';
-
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: redirectUri,
-    client_id: clientId,
-    code_verifier: pkce.codeVerifier,
-  });
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
@@ -81,13 +54,19 @@ export default async function handler(req: any, res: any) {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization: `Basic ${credentials}`,
     },
-    body: body.toString(),
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      code_verifier: pkce.codeVerifier,
+    }).toString(),
   });
 
   if (!tokenRes.ok) {
     const detail = await tokenRes.text();
     console.error('Airtable token exchange failed:', detail);
-    return res.redirect(`/?auth_error=${encodeURIComponent('token_exchange_failed')}`);
+    return res.redirect('/?auth_error=token_exchange_failed');
   }
 
   const tokens: AirtableTokenResponse = await tokenRes.json();
@@ -98,11 +77,9 @@ export default async function handler(req: any, res: any) {
     secret
   );
 
-  const maxAge = 60 * 24 * 60 * 60; // 60 days
-
   res.setHeader('Set-Cookie', [
     `${PKCE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-    `${TOKEN_COOKIE}=${sealedToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
+    `${TOKEN_COOKIE}=${sealedToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 24 * 60 * 60}`,
   ]);
 
   return res.redirect('/');

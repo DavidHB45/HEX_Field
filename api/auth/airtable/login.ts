@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { sealCookie } from '../../_lib/cookieCrypto';
+import { sealCookie } from '../../_lib';
 
 const COOKIE_NAME = 'at_pkce';
 
@@ -17,7 +17,6 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: 'Airtable OAuth not configured' });
   }
 
-  // PKCE: Airtable requires it
   const codeVerifier = randomBytes(32).toString('base64url');
   const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
   const state = randomBytes(16).toString('hex');
