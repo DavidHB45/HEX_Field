@@ -83,8 +83,8 @@ export default async function handler(req: any, res: any) {
   );
 
   res.setHeader('Set-Cookie', [
-    `${PKCE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-    `${TOKEN_COOKIE}=${sealed}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 24 * 60 * 60}`,
+    `${PKCE_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+    `${TOKEN_COOKIE}=${sealed}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 24 * 60 * 60}`,
   ]);
   return res.redirect('/');
 }
