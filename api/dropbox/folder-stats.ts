@@ -76,7 +76,7 @@ export default async function handler(req: any, res: any) {
   if (!opportunityName?.trim()) return res.status(400).json({ error: 'opportunityName required' });
 
   const safeName = opportunityName.trim().replace(/\//g, '-');
-  const root = (process.env.DROPBOX_ROOT_FOLDER ?? '/Current Opportunities').replace(/\/$/, '');
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
   const oppFolder = `${root}/${safeName}`;
 
   try {
