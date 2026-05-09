@@ -4,6 +4,7 @@ import { Camera, Pencil, Ruler, Mic, FolderOpen, MapPin, type LucideIcon } from 
 import { AppHeader } from '../components/AppHeader';
 import { C } from '../theme';
 import type { DropboxFolderStats } from '../lib/dropbox';
+import { PhotosTab } from './tabs/PhotosTab';
 
 interface Opportunity {
   id: string;
@@ -354,6 +355,7 @@ export function OpportunityDetailPage() {
       >
         {TABS.map(({ id: tabId, label, Icon }) => {
           const active = activeTab === tabId;
+          const count = tabId === 'photos' ? (opp?.fields['Photos Count'] ?? 0) : 0;
           return (
             <button
               key={tabId}
@@ -368,6 +370,7 @@ export function OpportunityDetailPage() {
                 color: active ? C.red : C.muted,
                 borderBottom: `3px solid ${active ? C.red : 'transparent'}`,
                 minWidth: 70,
+                position: 'relative',
               }}
             >
               <Icon size={20} />
@@ -381,6 +384,25 @@ export function OpportunityDetailPage() {
               >
                 {label}
               </span>
+              {count > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 10,
+                    background: C.red,
+                    color: C.white,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: '1px 5px',
+                    borderRadius: 8,
+                    minWidth: 16,
+                    textAlign: 'center',
+                  }}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -410,7 +432,20 @@ export function OpportunityDetailPage() {
               stats={stats}
             />
           )}
-          {activeTab === 'photos' && <PlaceholderTab label="Photos" />}
+          {activeTab === 'photos' && (
+            <PhotosTab
+              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+              recordId={opp.id}
+              currentPhotosCount={opp.fields['Photos Count'] ?? 0}
+              lastSiteVisit={opp.fields['Last Site Visit']}
+              dropboxAuthRequired={dropboxAuthRequired}
+              onOppFieldsUpdate={(fields) =>
+                setOpp((prev) =>
+                  prev ? { ...prev, fields: { ...prev.fields, ...fields } } : prev
+                )
+              }
+            />
+          )}
           {activeTab === 'sketches' && <PlaceholderTab label="Sketches" />}
           {activeTab === 'measure' && <PlaceholderTab label="Measurements" />}
           {activeTab === 'notes' && <PlaceholderTab label="Voice Notes" />}
