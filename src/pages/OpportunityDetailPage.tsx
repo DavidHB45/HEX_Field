@@ -68,11 +68,13 @@ function OverviewTab({
   opp,
   folderCreating,
   folderError,
+  dropboxAuthRequired,
   stats,
 }: {
   opp: Opportunity;
   folderCreating: boolean;
   folderError: string | null;
+  dropboxAuthRequired: boolean;
   stats: DropboxFolderStats | null;
 }) {
   const f = opp.fields;
@@ -112,7 +114,31 @@ function OverviewTab({
           </div>
         )}
 
-        {!folderCreating && folderError && (
+        {!folderCreating && dropboxAuthRequired && (
+          <div style={{ marginBottom: 8 }}>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+              Connect Dropbox to create and sync your job-walk folder.
+            </p>
+            <a
+              href="/api/auth/dropbox/login"
+              style={{
+                display: 'inline-block',
+                background: C.red,
+                color: C.white,
+                padding: '10px 20px',
+                borderRadius: 4,
+                fontWeight: 700,
+                fontSize: 13,
+                textDecoration: 'none',
+                letterSpacing: 0.5,
+              }}
+            >
+              Connect Dropbox
+            </a>
+          </div>
+        )}
+
+        {!folderCreating && !dropboxAuthRequired && folderError && (
           <div style={{ fontSize: 13, color: C.red, marginBottom: 8 }}>
             {folderError}
           </div>
@@ -232,6 +258,7 @@ export function OpportunityDetailPage() {
   const [loadError, setLoadError] = useState(false);
   const [folderCreating, setFolderCreating] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
+  const [dropboxAuthRequired, setDropboxAuthRequired] = useState(false);
   const [stats, setStats] = useState<DropboxFolderStats | null>(null);
 
   // Load the opportunity record
@@ -268,7 +295,11 @@ export function OpportunityDetailPage() {
       })
         .then(async (res) => {
           if (!res.ok) {
-            const body = await res.json() as { error?: string };
+            const body = await res.json() as { error?: string; code?: string };
+            if (body.code === 'UNAUTHENTICATED') {
+              setDropboxAuthRequired(true);
+              return;
+            }
             throw new Error(body.error ?? `HTTP ${res.status}`);
           }
           const data = await res.json() as { folderUrl: string };
@@ -375,6 +406,7 @@ export function OpportunityDetailPage() {
               opp={opp}
               folderCreating={folderCreating}
               folderError={folderError}
+              dropboxAuthRequired={dropboxAuthRequired}
               stats={stats}
             />
           )}
