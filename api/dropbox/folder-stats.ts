@@ -28,6 +28,12 @@ function getToken(cookieHeader: string | undefined): string | null {
   } catch { return null; }
 }
 
+async function readErrorBody(r: Response): Promise<{ error_summary?: string }> {
+  const text = await r.text();
+  try { return JSON.parse(text) as { error_summary?: string }; }
+  catch { return { error_summary: text }; }
+}
+
 async function countFiles(token: string, path: string): Promise<number> {
   const r = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
     method: 'POST',
@@ -35,7 +41,7 @@ async function countFiles(token: string, path: string): Promise<number> {
     body: JSON.stringify({ path, recursive: false }),
   });
   if (!r.ok) {
-    const err = await r.json() as { error_summary?: string };
+    const err = await readErrorBody(r);
     if (err.error_summary?.includes('not_found') || err.error_summary?.includes('path/not_found')) {
       return 0;
     }
@@ -52,7 +58,7 @@ async function fileExists(token: string, path: string): Promise<boolean> {
     body: JSON.stringify({ path }),
   });
   if (r.ok) return true;
-  const err = await r.json() as { error_summary?: string };
+  const err = await readErrorBody(r);
   if (err.error_summary?.includes('not_found') || err.error_summary?.includes('path/not_found')) {
     return false;
   }
