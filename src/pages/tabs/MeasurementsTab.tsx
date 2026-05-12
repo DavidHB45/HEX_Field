@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Ruler, Plus, CheckCircle, AlertCircle, Loader, Trash2, RefreshCw } from 'lucide-react';
 import { C } from '../../theme';
 
 interface MeasurementsTabProps {
   opportunityName: string;
   dropboxAuthRequired: boolean;
+  onAuthError?: () => void;
 }
 
 interface MeasurementEntry {
@@ -55,7 +56,7 @@ function EmptyState() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: MeasurementsTabProps) {
+export function MeasurementsTab({ opportunityName, dropboxAuthRequired, onAuthError }: MeasurementsTabProps) {
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -65,19 +66,15 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
-  const filePath = useMemo(() => {
-    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
-      .replace(/^\//, '').replace(/\/$/, '');
-    return `/${root}/${opportunityName}/measurements.md`;
-  }, [opportunityName]);
-
   // ── Fetch existing measurements on mount ──────────────────────────────────
 
   const fetchMeasurements = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`/api/dropbox/file?path=${encodeURIComponent(filePath)}`);
+      const params = new URLSearchParams({ opportunityName, fileType: 'measurements' });
+      const res = await fetch(`/api/dropbox/file?${params}`);
+      if (res.status === 401) { onAuthError?.(); return; }
       if (res.status === 404) {
         setMeasurements([]);
         return;
@@ -93,7 +90,7 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
     } finally {
       setLoading(false);
     }
-  }, [filePath]);
+  }, [opportunityName, onAuthError]);
 
   useEffect(() => {
     if (!dropboxAuthRequired) fetchMeasurements();
@@ -117,8 +114,9 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
       const res = await fetch('/api/dropbox/append-md', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath, text: row }),
+        body: JSON.stringify({ opportunityName, fileType: 'measurements', text: row }),
       });
+      if (res.status === 401) { onAuthError?.(); throw new Error('Session expired — reconnect Dropbox'); }
       if (!res.ok) {
         const body = await res.json() as { error?: string; detail?: string };
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
@@ -143,11 +141,13 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
     const content = buildMdContent(opportunityName, updated);
 
     try {
-      const res = await fetch(`/api/dropbox/file?path=${encodeURIComponent(filePath)}`, {
+      const params = new URLSearchParams({ opportunityName, fileType: 'measurements' });
+      const res = await fetch(`/api/dropbox/file?${params}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       });
+      if (res.status === 401) { onAuthError?.(); throw new Error('Session expired — reconnect Dropbox'); }
       if (!res.ok) {
         const body = await res.json() as { error?: string; detail?: string };
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
@@ -158,7 +158,7 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
     } finally {
       setDeletingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     }
-  }, [measurements, opportunityName, filePath]);
+  }, [measurements, opportunityName, onAuthError]);
 
   // ── Auth gate ─────────────────────────────────────────────────────────────
 

@@ -84,7 +84,7 @@ function OverviewTab({
 }) {
   const f = opp.fields;
   const oppName = f['Opportunity Name'] ?? opp.id;
-  const rootLabel = (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
+  const rootLabel = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
     .replace(/^\//, '')
     .replace(/\/$/, '');
 
@@ -319,10 +319,11 @@ export function OpportunityDetailPage() {
         .finally(() => setFolderCreating(false));
     }
 
-    // Fetch live folder stats
+    // Fetch live folder stats — also serves as an auth probe when folder already exists
     const params = new URLSearchParams({ opportunityName: oppName });
     fetch(`/api/dropbox/folder-stats?${params}`)
       .then(async (res) => {
+        if (res.status === 401) { setDropboxAuthRequired(true); return; }
         if (!res.ok) return;
         const data = await res.json() as DropboxFolderStats;
         setStats(data);
@@ -468,6 +469,7 @@ export function OpportunityDetailPage() {
                     prev ? { ...prev, fields: { ...prev.fields, ...fields } } : prev
                   )
                 }
+                onAuthError={() => setDropboxAuthRequired(true)}
               />
             </TabErrorBoundary>
           )}
@@ -476,6 +478,7 @@ export function OpportunityDetailPage() {
               <SketchesTab
                 opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
                 dropboxAuthRequired={dropboxAuthRequired}
+                onAuthError={() => setDropboxAuthRequired(true)}
               />
             </TabErrorBoundary>
           )}
@@ -484,6 +487,7 @@ export function OpportunityDetailPage() {
               <MeasurementsTab
                 opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
                 dropboxAuthRequired={dropboxAuthRequired}
+                onAuthError={() => setDropboxAuthRequired(true)}
               />
             </TabErrorBoundary>
           )}
@@ -493,6 +497,7 @@ export function OpportunityDetailPage() {
                 opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
                 opportunityAddress={opp.fields.Address}
                 dropboxAuthRequired={dropboxAuthRequired}
+                onAuthError={() => setDropboxAuthRequired(true)}
               />
             </TabErrorBoundary>
           )}

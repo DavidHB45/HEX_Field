@@ -19,7 +19,6 @@ interface UploadItem {
   filename: string;
   previewUrl: string;
   blob: Blob;
-  dropboxPath: string;
   status: UploadStatus;
   error?: string;
 }
@@ -27,6 +26,7 @@ interface UploadItem {
 interface SketchesTabProps {
   opportunityName: string;
   dropboxAuthRequired: boolean;
+  onAuthError?: () => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ function RemoteSketchCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTabProps) {
+export function SketchesTab({ opportunityName, dropboxAuthRequired, onAuthError }: SketchesTabProps) {
   const { showToast } = useToast();
   const [drawing, setDrawing] = useState(false);
   const [remoteSketches, setRemoteSketches] = useState<RemoteSketch[]>([]);
@@ -197,6 +197,7 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
     try {
       const params = new URLSearchParams({ opportunityName });
       const res = await fetch(`/api/dropbox/sketches?${params}`);
+      if (res.status === 401) { onAuthError?.(); return; }
       if (!res.ok) {
         const body = await res.json() as { error?: string };
         throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -210,7 +211,7 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
     } finally {
       setLoadingRemote(false);
     }
-  }, [opportunityName, showToast]);
+  }, [opportunityName, showToast, onAuthError]);
 
   useEffect(() => {
     if (!dropboxAuthRequired) fetchRemoteSketches();
@@ -221,9 +222,13 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
     setUploadQueue((q) => q.map((i) => i.id === item.id ? { ...i, status: 'uploading' } : i));
     try {
       const form = new FormData();
-      form.append('targetPath', item.dropboxPath);
+      // Server constructs the full Dropbox path from these semantic fields.
+      form.append('opportunityName', opportunityName);
+      form.append('subFolder', 'Sketches');
+      form.append('filename', item.filename);
       form.append('file', item.blob, item.filename);
       const res = await fetch('/api/dropbox/upload', { method: 'POST', body: form });
+      if (res.status === 401) { onAuthError?.(); throw new Error('Session expired — reconnect Dropbox'); }
       if (!res.ok) {
         const body = await res.json() as { error?: string; detail?: string };
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
@@ -237,7 +242,7 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
       showToast('error', `Sketch upload failed`);
       return false;
     }
-  }, [showToast]);
+  }, [opportunityName, showToast, onAuthError]);
 
   // ── Drain the upload queue ──────────────────────────────────────────────────
   const drainQueue = useCallback(
@@ -274,17 +279,12 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
       setDrawing(false);
       const filename = buildSketchFilename();
       const blob = dataUrlToBlob(dataUrl);
-      const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
-        .replace(/^\//, '')
-        .replace(/\/$/, '');
-      const dropboxPath = `/${root}/${opportunityName}/Sketches/${filename}`;
 
       const newItem: UploadItem = {
         id: `sketch_${Date.now()}`,
         filename,
         previewUrl: dataUrl,
         blob,
-        dropboxPath,
         status: 'pending',
       };
 

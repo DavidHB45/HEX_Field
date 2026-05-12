@@ -7,6 +7,7 @@ interface NotesTabProps {
   opportunityName: string;
   opportunityAddress?: string;
   dropboxAuthRequired: boolean;
+  onAuthError?: () => void;
 }
 
 type RecordStatus = 'idle' | 'recording' | 'confirming' | 'formatting' | 'saving' | 'done' | 'error';
@@ -119,7 +120,7 @@ function EmptyNotes() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequired }: NotesTabProps) {
+export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequired, onAuthError }: NotesTabProps) {
   const { showToast } = useToast();
   const speechAvailable = useMemo(() => getSpeechRecognition() !== null, []);
 
@@ -135,19 +136,15 @@ export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequi
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const filePath = useMemo(() => {
-    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
-      .replace(/^\//, '').replace(/\/$/, '');
-    return `/${root}/${opportunityName}/site-notes.md`;
-  }, [opportunityName]);
-
   // ── Fetch notes on mount ──────────────────────────────────────────────────
 
   const fetchNotes = useCallback(async () => {
     setNotesLoading(true);
     setNotesError(null);
     try {
-      const res = await fetch(`/api/dropbox/file?path=${encodeURIComponent(filePath)}`);
+      const params = new URLSearchParams({ opportunityName, fileType: 'site-notes' });
+      const res = await fetch(`/api/dropbox/file?${params}`);
+      if (res.status === 401) { onAuthError?.(); return; }
       if (res.status === 404) { setNotes([]); return; }
       if (!res.ok) {
         const body = await res.json() as { error?: string };
@@ -160,7 +157,7 @@ export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequi
     } finally {
       setNotesLoading(false);
     }
-  }, [filePath]);
+  }, [opportunityName, onAuthError]);
 
   useEffect(() => {
     if (!dropboxAuthRequired) fetchNotes();
@@ -240,8 +237,9 @@ export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequi
       const appendRes = await fetch('/api/dropbox/append-md', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath, text: '\n\n' + markdown }),
+        body: JSON.stringify({ opportunityName, fileType: 'site-notes', text: '\n\n' + markdown }),
       });
+      if (appendRes.status === 401) { onAuthError?.(); throw new Error('Session expired — reconnect Dropbox'); }
       if (!appendRes.ok) {
         const body = await appendRes.json() as { error?: string; detail?: string };
         throw new Error(body.detail ?? body.error ?? `HTTP ${appendRes.status}`);
@@ -259,7 +257,7 @@ export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequi
       setErrorMsg(msg);
       showToast('error', `Note save failed: ${msg}`);
     }
-  }, [opportunityName, opportunityAddress, filePath, fetchNotes, showToast]);
+  }, [opportunityName, opportunityAddress, onAuthError, fetchNotes, showToast]);
 
   const handleConfirm = useCallback(() => {
     const text = speechAvailable ? finalTranscript.trim() : typedNote.trim();
