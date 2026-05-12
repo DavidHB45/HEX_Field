@@ -1,5 +1,18 @@
 {
   "rewrites": [
+    { "source": "/api/auth/airtable/login",    "destination": "/api/auth?provider=airtable&action=login" },
+    { "source": "/api/auth/airtable/callback", "destination": "/api/auth?provider=airtable&action=callback" },
+    { "source": "/api/auth/dropbox/login",     "destination": "/api/auth?provider=dropbox&action=login" },
+    { "source": "/api/auth/dropbox/callback",  "destination": "/api/auth?provider=dropbox&action=callback" },
+    { "source": "/api/airtable/opportunities/:id", "destination": "/api/airtable?id=:id" },
+    { "source": "/api/airtable/opportunities",     "destination": "/api/airtable" },
+    { "source": "/api/dropbox/folder-stats", "destination": "/api/dropbox?action=folder-stats" },
+    { "source": "/api/dropbox/folder",       "destination": "/api/dropbox?action=folder" },
+    { "source": "/api/dropbox/photos",       "destination": "/api/dropbox?action=photos" },
+    { "source": "/api/dropbox/sketches",     "destination": "/api/dropbox?action=sketches" },
+    { "source": "/api/dropbox/upload",       "destination": "/api/dropbox?action=upload" },
+    { "source": "/api/dropbox/file",         "destination": "/api/dropbox?action=file" },
+    { "source": "/api/dropbox/append-md",    "destination": "/api/dropbox?action=append-md" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
