@@ -2,12 +2,44 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/pwa-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- PWA / theme -->
     <meta name="theme-color" content="#263E57" />
+    <link rel="icon" type="image/png" href="/icons/pwa-192.png" />
+
+    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- black-translucent lets content bleed under the status bar (full-bleed) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Job Walk" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!--
+      iOS Splash Screens
+      Physical-pixel PNGs matched to device via media queries.
+      Placeholders are solid Harris Navy — replace with real logo artwork.
+      See scripts/gen-pwa-assets.js and its header comment for regeneration instructions.
+
+      Device                        CSS px       DPR   Physical px
+      iPhone 12/13/14               390×844      @3x   1170×2532
+      iPhone 12/13/14 Plus/Pro Max  428×926      @3x   1284×2778
+      iPad Pro 11"                  834×1194     @2x   1668×2388
+      iPad Pro 12.9"               1024×1366     @2x   2048×2732
+    -->
+    <link rel="apple-touch-startup-image"
+          media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/icons/splash/apple-splash-1170-2532.png" />
+    <link rel="apple-touch-startup-image"
+          media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/icons/splash/apple-splash-1284-2778.png" />
+    <link rel="apple-touch-startup-image"
+          media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+          href="/icons/splash/apple-splash-1668-2388.png" />
+    <link rel="apple-touch-startup-image"
+          media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+          href="/icons/splash/apple-splash-2048-2732.png" />
+
     <title>Harris Job Walk</title>
   </head>
   <body>

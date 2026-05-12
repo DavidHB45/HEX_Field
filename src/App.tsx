@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { FontImports } from './theme';
 import { OpportunitiesListPage } from './pages/OpportunitiesListPage';
 import { OpportunityDetailPage } from './pages/OpportunityDetailPage';
+import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
           </Routes>
         </BrowserRouter>
       </div>
+      <IOSInstallPrompt />
     </>
   );
 }
