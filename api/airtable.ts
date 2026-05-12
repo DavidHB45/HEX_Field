@@ -1,39 +1,12 @@
-import { createHash, createDecipheriv } from 'crypto';
+import { getToken } from './_utils';
 
-const TOKEN_COOKIE = 'at_token';
 const BASE_ID = process.env.AIRTABLE_BASE_ID ?? '';
 const TABLE = process.env.AIRTABLE_OPPORTUNITIES_TABLE ?? 'Project Opportunities';
 const WRITABLE = new Set(['Dropbox Folder URL', 'Last Site Visit', 'Photos Count']);
 
-function parseCookies(header: string | undefined): Record<string, string> {
-  if (!header) return {};
-  return Object.fromEntries(
-    header.split(';').map((c) => {
-      const [k, ...v] = c.trim().split('=');
-      return [k.trim(), decodeURIComponent(v.join('='))];
-    })
-  );
-}
-function getToken(cookieHeader: string | undefined): string | null {
-  const secret = process.env.SESSION_SECRET ?? '';
-  const sealed = parseCookies(cookieHeader)[TOKEN_COOKIE];
-  if (!sealed) return null;
-  try {
-    const key = createHash('sha256').update(secret).digest();
-    const buf = Buffer.from(sealed, 'base64url');
-    const decipher = createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12));
-    decipher.setAuthTag(buf.subarray(12, 28));
-    const data = JSON.parse(
-      Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString('utf8')
-    ) as { accessToken: string; expiresAt: number };
-    if (Date.now() > data.expiresAt) return null;
-    return data.accessToken;
-  } catch { return null; }
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
-  const token = getToken(req.headers['cookie']);
+  const token = getToken(req.headers['cookie'], 'at_token');
   if (!token) return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
 
   if (!BASE_ID) {
