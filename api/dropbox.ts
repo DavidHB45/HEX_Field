@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'http';
-import { getToken } from './_utils';
+import { getToken, getTokenData, refreshDropboxToken, sealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils';
 
 // Upload requires raw body; disable Vercel's parser globally and parse manually elsewhere.
 export const config = { api: { bodyParser: false } };
@@ -484,10 +484,29 @@ async function handleAppendMd(req: any, res: any, token: string) {
   }
 }
 
+const DB_TOKEN = 'db_token';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
-  const token = getToken(req.headers['cookie'], 'db_token');
-  if (!token) return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
+  let token = getToken(req.headers['cookie'], DB_TOKEN);
+
+  if (!token) {
+    // Token expired or missing — attempt one silent refresh
+    const tokenData = getTokenData(req.headers['cookie'], DB_TOKEN);
+    if (!tokenData?.refreshToken) {
+      return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
+    }
+    try {
+      const refreshed = await refreshDropboxToken(tokenData.refreshToken);
+      const secret = process.env.SESSION_SECRET ?? '';
+      res.setHeader('Set-Cookie', [
+        `${DB_TOKEN}=${sealCookie(refreshed, secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TOKEN_MAX_AGE_SECONDS}`,
+      ]);
+      token = refreshed.accessToken;
+    } catch {
+      return res.status(401).json({ error: 'Session expired', code: 'UNAUTHENTICATED' });
+    }
+  }
 
   const { action } = req.query as { action?: string };
 

@@ -1,13 +1,31 @@
-import { getToken } from './_utils';
+import { getToken, getTokenData, refreshAirtableToken, sealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils';
 
 const BASE_ID = process.env.AIRTABLE_BASE_ID ?? '';
 const TABLE = process.env.AIRTABLE_OPPORTUNITIES_TABLE ?? 'Project Opportunities';
 const WRITABLE = new Set(['Dropbox Folder URL', 'Last Site Visit', 'Photos Count']);
+const AT_TOKEN = 'at_token';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
-  const token = getToken(req.headers['cookie'], 'at_token');
-  if (!token) return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
+  let token = getToken(req.headers['cookie'], AT_TOKEN);
+
+  if (!token) {
+    // Token expired or missing — attempt one silent refresh
+    const tokenData = getTokenData(req.headers['cookie'], AT_TOKEN);
+    if (!tokenData?.refreshToken) {
+      return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
+    }
+    try {
+      const refreshed = await refreshAirtableToken(tokenData.refreshToken);
+      const secret = process.env.SESSION_SECRET ?? '';
+      res.setHeader('Set-Cookie', [
+        `${AT_TOKEN}=${sealCookie(refreshed, secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TOKEN_MAX_AGE_SECONDS}`,
+      ]);
+      token = refreshed.accessToken;
+    } catch {
+      return res.status(401).json({ error: 'Session expired', code: 'UNAUTHENTICATED' });
+    }
+  }
 
   if (!BASE_ID) {
     console.error('[airtable] AIRTABLE_BASE_ID not set');

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Pencil, Ruler, Mic, FolderOpen, MapPin, type LucideIcon } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
+import { TabErrorBoundary } from '../components/TabErrorBoundary';
 import { C } from '../theme';
 import type { DropboxFolderStats } from '../lib/dropbox';
 import { PhotosTab } from './tabs/PhotosTab';
@@ -405,8 +406,33 @@ export function OpportunityDetailPage() {
 
       {/* Tab content */}
       {!opp && !loadError && (
-        <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 14 }}>
-          Loading…
+        <div style={{ padding: 16 }}>
+          <style>{`
+            @keyframes shimmer {
+              0% { background-position: -400px 0; }
+              100% { background-position: 400px 0; }
+            }
+            .sk { background: linear-gradient(90deg, ${C.border} 25%, #ebebeb 50%, ${C.border} 75%); background-size: 800px 100%; animation: shimmer 1.4s ease-in-out infinite; border-radius: 3px; }
+          `}</style>
+          {/* Folder card skeleton */}
+          <div style={{ background: C.cream, border: `1px solid ${C.border}`, borderRadius: 4, padding: 16, marginBottom: 16 }}>
+            <div className="sk" style={{ height: 10, width: '40%', marginBottom: 12 }} />
+            <div className="sk" style={{ height: 13, width: '60%', marginBottom: 6 }} />
+            <div className="sk" style={{ height: 12, width: '75%', marginBottom: 6 }} />
+            <div className="sk" style={{ height: 12, width: '55%', marginBottom: 6 }} />
+            <div className="sk" style={{ height: 12, width: '65%', marginBottom: 6 }} />
+            <div className="sk" style={{ height: 12, width: '60%' }} />
+          </div>
+          {/* Details card skeleton */}
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 4, padding: 16 }}>
+            <div className="sk" style={{ height: 14, width: '50%', marginBottom: 16 }} />
+            {[80, 60, 70, 55, 65].map((w, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, borderBottom: `1px solid ${C.border}`, marginBottom: 10 }}>
+                <div className="sk" style={{ height: 13, width: '25%' }} />
+                <div className="sk" style={{ height: 13, width: `${w * 0.4}%` }} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -419,46 +445,56 @@ export function OpportunityDetailPage() {
       {opp && (
         <>
           {activeTab === 'overview' && (
-            <OverviewTab
-              opp={opp}
-              folderCreating={folderCreating}
-              folderError={folderError}
-              dropboxAuthRequired={dropboxAuthRequired}
-              stats={stats}
-            />
+            <TabErrorBoundary tabName="Overview">
+              <OverviewTab
+                opp={opp}
+                folderCreating={folderCreating}
+                folderError={folderError}
+                dropboxAuthRequired={dropboxAuthRequired}
+                stats={stats}
+              />
+            </TabErrorBoundary>
           )}
           {activeTab === 'photos' && (
-            <PhotosTab
-              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
-              recordId={opp.id}
-              currentPhotosCount={opp.fields['Photos Count'] ?? 0}
-              lastSiteVisit={opp.fields['Last Site Visit']}
-              dropboxAuthRequired={dropboxAuthRequired}
-              onOppFieldsUpdate={(fields) =>
-                setOpp((prev) =>
-                  prev ? { ...prev, fields: { ...prev.fields, ...fields } } : prev
-                )
-              }
-            />
+            <TabErrorBoundary tabName="Photos">
+              <PhotosTab
+                opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+                recordId={opp.id}
+                currentPhotosCount={opp.fields['Photos Count'] ?? 0}
+                lastSiteVisit={opp.fields['Last Site Visit']}
+                dropboxAuthRequired={dropboxAuthRequired}
+                onOppFieldsUpdate={(fields) =>
+                  setOpp((prev) =>
+                    prev ? { ...prev, fields: { ...prev.fields, ...fields } } : prev
+                  )
+                }
+              />
+            </TabErrorBoundary>
           )}
           {activeTab === 'sketches' && (
-            <SketchesTab
-              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
-              dropboxAuthRequired={dropboxAuthRequired}
-            />
+            <TabErrorBoundary tabName="Sketches">
+              <SketchesTab
+                opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+                dropboxAuthRequired={dropboxAuthRequired}
+              />
+            </TabErrorBoundary>
           )}
           {activeTab === 'measure' && (
-            <MeasurementsTab
-              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
-              dropboxAuthRequired={dropboxAuthRequired}
-            />
+            <TabErrorBoundary tabName="Measure">
+              <MeasurementsTab
+                opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+                dropboxAuthRequired={dropboxAuthRequired}
+              />
+            </TabErrorBoundary>
           )}
           {activeTab === 'notes' && (
-            <NotesTab
-              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
-              opportunityAddress={opp.fields.Address}
-              dropboxAuthRequired={dropboxAuthRequired}
-            />
+            <TabErrorBoundary tabName="Notes">
+              <NotesTab
+                opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+                opportunityAddress={opp.fields.Address}
+                dropboxAuthRequired={dropboxAuthRequired}
+              />
+            </TabErrorBoundary>
           )}
         </>
       )}

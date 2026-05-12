@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, MapPin, Trash2, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { C } from '../../theme';
+import { useToast } from '../../context/ToastContext';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -256,6 +257,7 @@ export function PhotosTab({
   dropboxAuthRequired,
   onOppFieldsUpdate,
 }: PhotosTabProps) {
+  const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [remotePhotos, setRemotePhotos] = useState<RemotePhoto[]>([]);
   const [loadingRemote, setLoadingRemote] = useState(true);
@@ -278,11 +280,13 @@ export function PhotosTab({
       const data = await res.json() as { photos: RemotePhoto[] };
       setRemotePhotos(data.photos);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setLoadError(msg);
+      showToast('network', 'Could not load photos — check your connection');
     } finally {
       setLoadingRemote(false);
     }
-  }, [opportunityName]);
+  }, [opportunityName, showToast]);
 
   useEffect(() => {
     if (!dropboxAuthRequired) fetchRemotePhotos();
@@ -304,13 +308,15 @@ export function PhotosTab({
       }
 
       setUploadQueue((q) => q.map((i) => i.id === item.id ? { ...i, status: 'done' } : i));
+      showToast('success', `${item.filename} uploaded`);
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setUploadQueue((q) => q.map((i) => i.id === item.id ? { ...i, status: 'error', error: msg } : i));
+      showToast('error', `Upload failed: ${item.filename}`);
       return false;
     }
-  }, []);
+  }, [showToast]);
 
   // ── Process the upload queue sequentially ───────────────────────────────────
   const drainQueue = useCallback(
