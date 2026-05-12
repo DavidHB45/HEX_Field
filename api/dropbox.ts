@@ -358,26 +358,73 @@ async function handleUpload(req: any, res: any, token: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleFile(req: any, res: any, token: string) {
-  if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
   const { path } = req.query as { path?: string };
   if (!path) return res.status(400).json({ error: 'Missing path query parameter' });
 
-  try {
-    const r = await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
-    if (!r.ok) {
-      const err = await r.text();
-      console.error('[dropbox/file] delete error', r.status, err);
-      return res.status(500).json({ error: 'Dropbox delete failed', detail: err });
+  if (req.method === 'GET') {
+    try {
+      const r = await fetch('https://content.dropboxapi.com/2/files/download', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Dropbox-API-Arg': JSON.stringify({ path }) },
+      });
+      if (!r.ok) {
+        const err = await r.json() as { error_summary?: string };
+        if (err.error_summary?.includes('not_found')) return res.status(404).json({ error: 'File not found' });
+        return res.status(500).json({ error: 'Dropbox download failed', detail: JSON.stringify(err) });
+      }
+      const content = await r.text();
+      return res.status(200).json({ content });
+    } catch (err) {
+      console.error('[dropbox/file] GET', err);
+      return res.status(500).json({ error: 'Download failed', detail: String(err) });
     }
-    return res.status(200).json({ deleted: true });
-  } catch (err) {
-    console.error('[dropbox/file]', err);
-    return res.status(500).json({ error: 'Delete failed', detail: String(err) });
   }
+
+  if (req.method === 'PUT') {
+    try {
+      const { content } = await readJsonBody<{ content?: string }>(req);
+      if (content === undefined || content === null) return res.status(400).json({ error: 'content required' });
+      const r = await fetch('https://content.dropboxapi.com/2/files/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/octet-stream',
+          'Dropbox-API-Arg': JSON.stringify({ path, mode: { '.tag': 'overwrite' }, autorename: false, mute: true }),
+        },
+        body: content,
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.error('[dropbox/file] PUT error', r.status, err);
+        return res.status(500).json({ error: 'Dropbox upload failed', detail: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error('[dropbox/file] PUT', err);
+      return res.status(500).json({ error: 'Upload failed', detail: String(err) });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    try {
+      const r = await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.error('[dropbox/file] delete error', r.status, err);
+        return res.status(500).json({ error: 'Dropbox delete failed', detail: err });
+      }
+      return res.status(200).json({ deleted: true });
+    } catch (err) {
+      console.error('[dropbox/file]', err);
+      return res.status(500).json({ error: 'Delete failed', detail: String(err) });
+    }
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }
 
 const MEASUREMENTS_TABLE_HEADER = '| Label | Value | Timestamp |\n| --- | --- | --- |';

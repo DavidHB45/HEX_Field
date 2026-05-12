@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Ruler, Plus, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Ruler, Plus, CheckCircle, AlertCircle, Loader, Trash2, RefreshCw } from 'lucide-react';
 import { C } from '../../theme';
 
 interface MeasurementsTabProps {
@@ -16,6 +16,34 @@ interface MeasurementEntry {
 
 type SaveStatus = 'idle' | 'saving' | 'done' | 'error';
 
+// ─── Markdown helpers ─────────────────────────────────────────────────────────
+
+function parseMdTable(content: string): MeasurementEntry[] {
+  return content
+    .split('\n')
+    .filter((line) => /^\|/.test(line) && !/---/.test(line) && !/Label/.test(line))
+    .map((line) => {
+      const cells = line.split('|').map((c) => c.trim()).filter(Boolean);
+      if (cells.length < 3) return null;
+      const [label, valueStr, timestamp] = cells as [string, string, string];
+      const value = parseFloat(valueStr);
+      if (!label || isNaN(value) || !timestamp) return null;
+      return { id: timestamp, label, value, timestamp };
+    })
+    .filter((m): m is MeasurementEntry => m !== null);
+}
+
+function buildMdContent(opportunityName: string, rows: MeasurementEntry[]): string {
+  const safeName = opportunityName.replace(/\//g, '-');
+  const heading = `# Measurements — ${safeName}\n\n`;
+  if (rows.length === 0) return heading;
+  const tableHeader = '| Label | Value | Timestamp |\n| --- | --- | --- |';
+  const dataRows = rows.map((r) => `| ${r.label} | ${r.value.toFixed(2)} ft | ${r.timestamp} |`).join('\n');
+  return heading + tableHeader + '\n' + dataRows;
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
 function EmptyState() {
   return (
     <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
@@ -25,12 +53,54 @@ function EmptyState() {
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: MeasurementsTabProps) {
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [measurements, setMeasurements] = useState<MeasurementEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  const filePath = useMemo(() => {
+    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? 'Current Opportunities')
+      .replace(/^\//, '').replace(/\/$/, '');
+    return `/${root}/${opportunityName}/measurements.md`;
+  }, [opportunityName]);
+
+  // ── Fetch existing measurements on mount ──────────────────────────────────
+
+  const fetchMeasurements = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/dropbox/file?path=${encodeURIComponent(filePath)}`);
+      if (res.status === 404) {
+        setMeasurements([]);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json() as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json() as { content: string };
+      setMeasurements(parseMdTable(data.content));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [filePath]);
+
+  useEffect(() => {
+    if (!dropboxAuthRequired) fetchMeasurements();
+    else setLoading(false);
+  }, [fetchMeasurements, dropboxAuthRequired]);
+
+  // ── Add a measurement ─────────────────────────────────────────────────────
 
   const numVal = parseFloat(value);
   const canAdd = label.trim().length > 0 && value.trim().length > 0 && !isNaN(numVal) && saveStatus !== 'saving';
@@ -39,8 +109,6 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
     if (!canAdd) return;
     const ts = new Date().toISOString();
     const row = `| ${label.trim()} | ${numVal.toFixed(2)} ft | ${ts} |`;
-    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\//, '').replace(/\/$/, '');
-    const filePath = `/${root}/${opportunityName}/measurements.md`;
 
     setSaveStatus('saving');
     setSaveError(null);
@@ -55,7 +123,8 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
         const body = await res.json() as { error?: string; detail?: string };
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
       }
-      setMeasurements((prev) => [...prev, { id: `${Date.now()}`, label: label.trim(), value: numVal, timestamp: ts }]);
+      const entry: MeasurementEntry = { id: ts, label: label.trim(), value: numVal, timestamp: ts };
+      setMeasurements((prev) => [...prev, entry]);
       setLabel('');
       setValue('');
       setSaveStatus('done');
@@ -65,6 +134,33 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
       setSaveStatus('error');
     }
   };
+
+  // ── Delete a measurement ──────────────────────────────────────────────────
+
+  const handleDelete = useCallback(async (id: string) => {
+    setDeletingIds((prev) => new Set(prev).add(id));
+    const updated = measurements.filter((m) => m.id !== id);
+    const content = buildMdContent(opportunityName, updated);
+
+    try {
+      const res = await fetch(`/api/dropbox/file?path=${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) {
+        const body = await res.json() as { error?: string; detail?: string };
+        throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
+      }
+      setMeasurements(updated);
+    } catch (err) {
+      alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDeletingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    }
+  }, [measurements, opportunityName, filePath]);
+
+  // ── Auth gate ─────────────────────────────────────────────────────────────
 
   if (dropboxAuthRequired) {
     return (
@@ -91,6 +187,8 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
       </div>
     );
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ padding: 16 }}>
@@ -220,35 +318,104 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
         </button>
       </div>
 
+      {/* Loading state */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>
+          Loading measurements…
+        </div>
+      )}
+
+      {/* Load error */}
+      {loadError && !loading && (
+        <div
+          style={{
+            background: C.cream,
+            border: `1px solid ${C.border}`,
+            borderRadius: 4,
+            padding: 12,
+            marginBottom: 12,
+            fontSize: 13,
+            color: C.red,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>Could not load measurements: {loadError}</span>
+          <button
+            onClick={fetchMeasurements}
+            style={{
+              background: C.navy,
+              color: C.white,
+              padding: '6px 12px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 700,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <RefreshCw size={12} /> Retry
+          </button>
+        </div>
+      )}
+
       {/* Measurement list */}
-      {measurements.length === 0 ? (
-        <EmptyState />
-      ) : (
+      {!loading && !loadError && measurements.length === 0 && <EmptyState />}
+
+      {!loading && measurements.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[...measurements].reverse().map((m) => (
-            <div
-              key={m.id}
-              style={{
-                background: C.white,
-                border: `1px solid ${C.border}`,
-                borderRadius: 4,
-                padding: '10px 14px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{m.label}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                  {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {[...measurements].reverse().map((m) => {
+            const isDeleting = deletingIds.has(m.id);
+            return (
+              <div
+                key={m.id}
+                style={{
+                  background: C.white,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 4,
+                  padding: '10px 14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  opacity: isDeleting ? 0.5 : 1,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{m.label}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: C.navy }}>
+                    {m.value.toFixed(2)} ft
+                  </div>
+                  <button
+                    onClick={() => handleDelete(m.id)}
+                    disabled={isDeleting}
+                    style={{
+                      background: isDeleting ? C.border : 'rgba(180,0,0,0.9)',
+                      color: C.white,
+                      padding: 6,
+                      borderRadius: 4,
+                      border: 'none',
+                      cursor: isDeleting ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {isDeleting
+                      ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                      : <Trash2 size={14} />}
+                  </button>
                 </div>
               </div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: C.navy }}>
-                {m.value.toFixed(2)} ft
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
