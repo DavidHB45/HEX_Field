@@ -66,7 +66,7 @@ export function MeasurementsTab({ opportunityName, dropboxAuthRequired }: Measur
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const filePath = useMemo(() => {
-    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? 'Current Opportunities')
+    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
       .replace(/^\//, '').replace(/\/$/, '');
     return `/${root}/${opportunityName}/measurements.md`;
   }, [opportunityName]);

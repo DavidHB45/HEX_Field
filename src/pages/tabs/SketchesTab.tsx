@@ -274,7 +274,7 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
       setDrawing(false);
       const filename = buildSketchFilename();
       const blob = dataUrlToBlob(dataUrl);
-      const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? 'Current Opportunities')
+      const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
         .replace(/^\//, '')
         .replace(/\/$/, '');
       const dropboxPath = `/${root}/${opportunityName}/Sketches/${filename}`;
