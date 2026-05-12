@@ -95,7 +95,7 @@ async function handleFolder(req: any, res: any, token: string) {
   if (!opportunityName?.trim()) return res.status(400).json({ error: 'opportunityName required' });
 
   const safeName = opportunityName.trim().replace(/\//g, '-');
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
   const oppFolder = `${root}/${safeName}`;
 
   try {
@@ -143,7 +143,7 @@ async function handleFolderStats(req: any, res: any, token: string) {
   if (!opportunityName?.trim()) return res.status(400).json({ error: 'opportunityName required' });
 
   const safeName = opportunityName.trim().replace(/\//g, '-');
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
   const oppFolder = `${root}/${safeName}`;
 
   try {
@@ -174,7 +174,7 @@ async function handlePhotos(req: any, res: any, token: string) {
   const { opportunityName } = req.query as { opportunityName?: string };
   if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName' });
 
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
   const folderPath = `${root}/${opportunityName}/Photos`;
 
   let entries: DropboxEntry[] = [];
@@ -230,7 +230,7 @@ async function handleSketches(req: any, res: any, token: string) {
   const { opportunityName } = req.query as { opportunityName?: string };
   if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName' });
 
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
   const folderPath = `${root}/${opportunityName}/Sketches`;
 
   let entries: DropboxEntry[] = [];

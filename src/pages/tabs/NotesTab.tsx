@@ -136,7 +136,7 @@ export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequi
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const filePath = useMemo(() => {
-    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? 'Current Opportunities')
+    const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
       .replace(/^\//, '').replace(/\/$/, '');
     return `/${root}/${opportunityName}/site-notes.md`;
   }, [opportunityName]);

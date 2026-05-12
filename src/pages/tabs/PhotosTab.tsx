@@ -391,7 +391,7 @@ export function PhotosTab({
         const filename = buildFilename(gps);
         // Ensure unique filenames if multiple photos taken at same millisecond
         const uniqueFilename = i === 0 ? filename : filename.replace('.jpg', `_${i}.jpg`);
-        const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\//, '').replace(/\/$/, '');
+        const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\//, '').replace(/\/$/, '');
         const dropboxPath = `/${root}/${opportunityName}/Photos/${uniqueFilename}`;
         const previewUrl = URL.createObjectURL(blob);
         return {

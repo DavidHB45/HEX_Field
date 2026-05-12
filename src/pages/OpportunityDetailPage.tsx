@@ -84,7 +84,7 @@ function OverviewTab({
 }) {
   const f = opp.fields;
   const oppName = f['Opportunity Name'] ?? opp.id;
-  const rootLabel = (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities')
+  const rootLabel = (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities')
     .replace(/^\//, '')
     .replace(/\/$/, '');
 
