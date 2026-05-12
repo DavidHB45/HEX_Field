@@ -246,12 +246,24 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
       uploadingRef.current = true;
       const pending = queue.filter((i) => i.status === 'pending');
       let anySuccess = false;
-      for (const item of pending) {
-        const ok = await uploadItem(item);
-        if (ok) anySuccess = true;
+      try {
+        for (const item of pending) {
+          const ok = await uploadItem(item);
+          if (ok) anySuccess = true;
+        }
+      } finally {
+        uploadingRef.current = false;
       }
-      uploadingRef.current = false;
       if (anySuccess) await fetchRemoteSketches();
+
+      // If items were added while we were uploading, drain the new ones
+      setUploadQueue((current) => {
+        const stillPending = current.filter((i) => i.status === 'pending');
+        if (stillPending.length > 0) {
+          setTimeout(() => drainQueue(current), 0);
+        }
+        return current;
+      });
     },
     [uploadItem, fetchRemoteSketches]
   );
