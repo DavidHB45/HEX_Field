@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { parseCookies, sealCookie, unsealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils';
+import { parseCookies, sealCookie, unsealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils.js';
 
 const AT_PKCE = 'at_pkce';
 const AT_TOKEN = 'at_token';

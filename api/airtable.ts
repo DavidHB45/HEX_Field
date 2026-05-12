@@ -1,4 +1,4 @@
-import { getToken, getTokenData, refreshAirtableToken, sealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils';
+import { getToken, getTokenData, refreshAirtableToken, sealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils.js';
 
 const BASE_ID = process.env.AIRTABLE_BASE_ID ?? '';
 const TABLE = process.env.AIRTABLE_OPPORTUNITIES_TABLE ?? 'Project Opportunities';

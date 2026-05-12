@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'http';
-import { getToken, getTokenData, refreshDropboxToken, sealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils';
+import { getToken, getTokenData, refreshDropboxToken, sealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils.js';
 
 // Upload requires raw body; disable Vercel's parser globally and parse manually elsewhere.
 export const config = { api: { bodyParser: false } };
