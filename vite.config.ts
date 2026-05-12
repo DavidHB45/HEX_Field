@@ -7,7 +7,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: false,
+      // Inject the SW registration script automatically into index.html
+      injectRegister: 'auto',
       devOptions: { enabled: false },
       manifest: {
         name: 'Harris Job Walk',
@@ -19,8 +20,56 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         icons: [
-          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icons/pwa-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/pwa-512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: '/icons/pwa-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        // Navigation requests fall back to index.html for client-side routing,
+        // but /api/* must never be intercepted — those need to reach the server.
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+
+        // Precache all build output (HTML, JS, CSS, fonts, icons)
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+
+        // External assets (fonts, CDN) – cache-first with long TTL
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-stylesheets',
+              expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-webfonts',
+              expiration: { maxEntries: 20, maxAgeSeconds: 365 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'jsdelivr-cdn',
+              expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Explicitly do NOT cache /api/* — any fetch to /api/ must reach the
+          // network. No runtimeCaching entry means the SW passes it through.
         ],
       },
     }),
