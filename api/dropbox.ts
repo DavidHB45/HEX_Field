@@ -105,7 +105,7 @@ async function handleFolder(req: any, res: any, token: string) {
       createFolderIfMissing(token, `${oppFolder}/Photos`),
       createFolderIfMissing(token, `${oppFolder}/Sketches`),
       uploadTextIfMissing(token, `${oppFolder}/measurements.md`,
-        `# Measurements — ${safeName}\n\n| Label | Value |\n|-------|-------|\n`),
+        `# Measurements — ${safeName}\n\n`),
       uploadTextIfMissing(token, `${oppFolder}/site-notes.md`,
         `# Site Notes — ${safeName}\n\n`),
     ]);
@@ -380,12 +380,16 @@ async function handleFile(req: any, res: any, token: string) {
   }
 }
 
+const MEASUREMENTS_TABLE_HEADER = '| Label | Value | Timestamp |\n| --- | --- | --- |';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleAppendMd(req: any, res: any, token: string) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { filePath, content } = await readJsonBody<{ filePath?: string; content?: string }>(req);
+  const { filePath, text } = await readJsonBody<{ filePath?: string; text?: string }>(req);
   if (!filePath?.trim()) return res.status(400).json({ error: 'filePath required' });
-  if (!content?.trim()) return res.status(400).json({ error: 'content required' });
+  if (!text?.trim()) return res.status(400).json({ error: 'text required' });
+
+  const isMeasurements = filePath.endsWith('measurements.md');
 
   try {
     const downloadRes = await fetch('https://content.dropboxapi.com/2/files/download', {
@@ -402,8 +406,15 @@ async function handleAppendMd(req: any, res: any, token: string) {
       }
     }
 
-    const separator = existing && !existing.endsWith('\n') ? '\n' : '';
-    const updated = existing + separator + content;
+    let updated: string;
+    if (isMeasurements && !existing.includes('| --- |')) {
+      // No table present yet — write table header before the first data row
+      const base = existing.trimEnd();
+      updated = (base ? base + '\n\n' : '') + MEASUREMENTS_TABLE_HEADER + '\n' + text;
+    } else {
+      const separator = existing && !existing.endsWith('\n') ? '\n' : '';
+      updated = existing + separator + text;
+    }
 
     const uploadRes = await fetch('https://content.dropboxapi.com/2/files/upload', {
       method: 'POST',
