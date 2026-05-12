@@ -327,12 +327,14 @@ export function PhotosTab({
       const pending = queue.filter((i) => i.status === 'pending');
       let successCount = 0;
 
-      for (const item of pending) {
-        const ok = await uploadItem(item);
-        if (ok) successCount++;
+      try {
+        for (const item of pending) {
+          const ok = await uploadItem(item);
+          if (ok) successCount++;
+        }
+      } finally {
+        uploadingRef.current = false;
       }
-
-      uploadingRef.current = false;
 
       if (successCount > 0) {
         const newCount = countBefore + successCount;
@@ -345,19 +347,27 @@ export function PhotosTab({
         }
 
         try {
-          await fetch(`/api/airtable/opportunities/${recordId}`, {
+          const res = await fetch(`/api/airtable/opportunities/${recordId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fields }),
           });
-          onOppFieldsUpdate(fields);
+          if (res.ok) onOppFieldsUpdate(fields);
         } catch (err) {
           console.error('[PhotosTab] Airtable PATCH failed', err);
         }
 
-        // Refresh remote photos after batch upload
         await fetchRemotePhotos();
       }
+
+      // If items were added while we were uploading, drain the new ones
+      setUploadQueue((current) => {
+        const stillPending = current.filter((i) => i.status === 'pending');
+        if (stillPending.length > 0) {
+          setTimeout(() => drainQueue(current, countBefore + successCount, visitBefore), 0);
+        }
+        return current;
+      });
     },
     [uploadItem, recordId, fetchRemotePhotos, onOppFieldsUpdate]
   );
