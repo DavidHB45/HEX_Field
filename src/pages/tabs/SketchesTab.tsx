@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pencil, Trash2, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { C } from '../../theme';
 import { SketchCanvas } from '../../components/SketchCanvas';
+import { useToast } from '../../context/ToastContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,6 +181,7 @@ function RemoteSketchCard({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTabProps) {
+  const { showToast } = useToast();
   const [drawing, setDrawing] = useState(false);
   const [remoteSketches, setRemoteSketches] = useState<RemoteSketch[]>([]);
   const [loadingRemote, setLoadingRemote] = useState(true);
@@ -202,11 +204,13 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
       const data = await res.json() as { sketches: RemoteSketch[] };
       setRemoteSketches(data.sketches);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setLoadError(msg);
+      showToast('network', 'Could not load sketches — check your connection');
     } finally {
       setLoadingRemote(false);
     }
-  }, [opportunityName]);
+  }, [opportunityName, showToast]);
 
   useEffect(() => {
     if (!dropboxAuthRequired) fetchRemoteSketches();
@@ -225,13 +229,15 @@ export function SketchesTab({ opportunityName, dropboxAuthRequired }: SketchesTa
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
       }
       setUploadQueue((q) => q.map((i) => i.id === item.id ? { ...i, status: 'done' } : i));
+      showToast('success', `${item.filename} uploaded`);
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setUploadQueue((q) => q.map((i) => i.id === item.id ? { ...i, status: 'error', error: msg } : i));
+      showToast('error', `Sketch upload failed`);
       return false;
     }
-  }, []);
+  }, [showToast]);
 
   // ── Drain the upload queue ──────────────────────────────────────────────────
   const drainQueue = useCallback(

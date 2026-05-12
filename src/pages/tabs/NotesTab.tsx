@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Mic, MicOff, FileText, AlertCircle, Loader, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { C } from '../../theme';
+import { useToast } from '../../context/ToastContext';
 
 interface NotesTabProps {
   opportunityName: string;
@@ -119,6 +120,7 @@ function EmptyNotes() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequired }: NotesTabProps) {
+  const { showToast } = useToast();
   const speechAvailable = useMemo(() => getSpeechRecognition() !== null, []);
 
   const [status, setStatus] = useState<RecordStatus>('idle');
@@ -248,13 +250,16 @@ export function NotesTab({ opportunityName, opportunityAddress, dropboxAuthRequi
       setStatus('done');
       setFinalTranscript('');
       setTypedNote('');
+      showToast('success', 'Site note saved to Dropbox');
       await fetchNotes();
       setTimeout(() => setStatus('idle'), 2000);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       setStatus('error');
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setErrorMsg(msg);
+      showToast('error', `Note save failed: ${msg}`);
     }
-  }, [opportunityName, opportunityAddress, filePath, fetchNotes]);
+  }, [opportunityName, opportunityAddress, filePath, fetchNotes, showToast]);
 
   const handleConfirm = useCallback(() => {
     const text = speechAvailable ? finalTranscript.trim() : typedNote.trim();

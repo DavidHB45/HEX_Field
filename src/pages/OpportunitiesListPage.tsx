@@ -3,6 +3,40 @@ import { useNavigate } from 'react-router-dom';
 import { Search, ChevronRight, MapPin, Link as LinkIcon } from 'lucide-react';
 import { C } from '../theme';
 
+function SkeletonCard() {
+  return (
+    <div
+      style={{
+        background: C.white,
+        border: `1px solid ${C.border}`,
+        borderRadius: 4,
+        padding: 14,
+        marginBottom: 10,
+      }}
+    >
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -400px 0; }
+          100% { background-position: 400px 0; }
+        }
+        .skeleton-line {
+          background: linear-gradient(90deg, ${C.border} 25%, #ebebeb 50%, ${C.border} 75%);
+          background-size: 800px 100%;
+          animation: shimmer 1.4s ease-in-out infinite;
+          border-radius: 3px;
+        }
+      `}</style>
+      <div className="skeleton-line" style={{ height: 16, width: '70%', marginBottom: 10 }} />
+      <div className="skeleton-line" style={{ height: 13, width: '45%', marginBottom: 10 }} />
+      <div className="skeleton-line" style={{ height: 11, width: '55%', marginBottom: 14 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+        <div className="skeleton-line" style={{ height: 10, width: '30%' }} />
+        <div className="skeleton-line" style={{ height: 10, width: '18%' }} />
+      </div>
+    </div>
+  );
+}
+
 interface Opportunity {
   id: string;
   fields: {
@@ -102,8 +136,8 @@ export function OpportunitiesListPage() {
       {/* Content */}
       <div style={{ padding: '8px 12px' }}>
         {state === 'loading' && (
-          <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 14 }}>
-            Loading opportunities…
+          <div style={{ paddingTop: 8 }}>
+            {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} />)}
           </div>
         )}
 
