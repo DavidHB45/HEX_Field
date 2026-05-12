@@ -1,7 +1,12 @@
 import { createHash, createDecipheriv } from 'crypto';
 
 const TOKEN_COOKIE = 'db_token';
-const ROOT = (process.env.DROPBOX_ROOT_FOLDER ?? '/Current Opportunities').replace(/\/$/, '');
+
+async function readErrorBody(r: Response): Promise<{ error_summary?: string }> {
+  const text = await r.text();
+  try { return JSON.parse(text) as { error_summary?: string }; }
+  catch { return { error_summary: text }; }
+}
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -47,9 +52,11 @@ export default async function handler(req: any, res: any) {
   if (!token) return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
 
   const { opportunityName } = req.query as { opportunityName?: string };
-  if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName' });
+  if (!opportunityName?.trim()) return res.status(400).json({ error: 'Missing opportunityName' });
 
-  const folderPath = `${ROOT}/${opportunityName}/Photos`;
+  const safeName = opportunityName.trim().replace(/\//g, '-');
+  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? 'Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
+  const folderPath = `${root}/${safeName}/Photos`;
 
   // List the Photos folder
   let entries: DropboxEntry[] = [];
@@ -64,9 +71,9 @@ export default async function handler(req: any, res: any) {
     });
 
     if (!listRes.ok) {
-      const err = await listRes.json() as { error_summary?: string };
+      const err = await readErrorBody(listRes);
       // Folder doesn't exist yet — return empty list
-      if (err.error_summary?.startsWith('path/not_found')) {
+      if (err.error_summary?.includes('not_found')) {
         return res.status(200).json({ photos: [] });
       }
       console.error('[dropbox/photos] list_folder error', listRes.status, err);
