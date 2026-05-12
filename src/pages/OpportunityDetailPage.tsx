@@ -7,6 +7,7 @@ import type { DropboxFolderStats } from '../lib/dropbox';
 import { PhotosTab } from './tabs/PhotosTab';
 import { SketchesTab } from './tabs/SketchesTab';
 import { MeasurementsTab } from './tabs/MeasurementsTab';
+import { NotesTab } from './tabs/NotesTab';
 
 interface Opportunity {
   id: string;
@@ -245,14 +246,6 @@ function OverviewTab({
   );
 }
 
-function PlaceholderTab({ label }: { label: string }) {
-  return (
-    <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>
-      <p style={{ fontSize: 14 }}>{label} — coming in a future phase</p>
-    </div>
-  );
-}
-
 export function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -460,7 +453,13 @@ export function OpportunityDetailPage() {
               dropboxAuthRequired={dropboxAuthRequired}
             />
           )}
-          {activeTab === 'notes' && <PlaceholderTab label="Voice Notes" />}
+          {activeTab === 'notes' && (
+            <NotesTab
+              opportunityName={opp.fields['Opportunity Name'] ?? opp.id}
+              opportunityAddress={opp.fields.Address}
+              dropboxAuthRequired={dropboxAuthRequired}
+            />
+          )}
         </>
       )}
     </div>
