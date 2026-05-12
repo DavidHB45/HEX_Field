@@ -1,35 +1,25 @@
-import { createHash, createDecipheriv } from 'crypto';
 import type { IncomingMessage } from 'http';
+import { getToken } from './_utils';
 
 // Upload requires raw body; disable Vercel's parser globally and parse manually elsewhere.
 export const config = { api: { bodyParser: false } };
 
-const TOKEN_COOKIE = 'db_token';
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  if (!header) return {};
-  return Object.fromEntries(
-    header.split(';').map((c) => {
-      const [k, ...v] = c.trim().split('=');
-      return [k.trim(), decodeURIComponent(v.join('='))];
-    })
-  );
+async function dbPost(token: string, endpoint: string, body: unknown): Promise<Response> {
+  return fetch(`https://api.dropboxapi.com/2/${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
-function getToken(cookieHeader: string | undefined): string | null {
-  const secret = process.env.SESSION_SECRET ?? '';
-  const sealed = parseCookies(cookieHeader)[TOKEN_COOKIE];
-  if (!sealed) return null;
-  try {
-    const key = createHash('sha256').update(secret).digest();
-    const buf = Buffer.from(sealed, 'base64url');
-    const decipher = createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12));
-    decipher.setAuthTag(buf.subarray(12, 28));
-    const data = JSON.parse(
-      Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString('utf8')
-    ) as { accessToken: string; expiresAt: number };
-    if (Date.now() > data.expiresAt) return null;
-    return data.accessToken;
-  } catch { return null; }
+
+async function readErrorBody(r: Response): Promise<{ error_summary?: string; error?: unknown }> {
+  const text = await r.text();
+  try { return JSON.parse(text) as { error_summary?: string; error?: unknown }; }
+  catch { return { error_summary: text }; }
+}
+
+function isNotFoundError(summary?: string): boolean {
+  return summary?.includes('not_found') === true;
 }
 
 function readRawBody(req: IncomingMessage): Promise<Buffer> {
@@ -46,21 +36,6 @@ async function readJsonBody<T>(req: any): Promise<T> {
   return JSON.parse(raw.toString('utf8')) as T;
 }
 
-async function dbPost(token: string, endpoint: string, body: unknown): Promise<Response> {
-  return fetch(`https://api.dropboxapi.com/2/${endpoint}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-async function readErrorBody(r: Response): Promise<{ error_summary?: string; error?: unknown }> {
-  const text = await r.text();
-  try { return JSON.parse(text) as { error_summary?: string; error?: unknown }; }
-  catch { return { error_summary: text }; }
-}
-
-// ── folder: create opportunity folder structure ────────────────────────────
-
 async function createFolderIfMissing(token: string, path: string): Promise<void> {
   const r = await dbPost(token, 'files/create_folder_v2', { path, autorename: false });
   if (!r.ok) {
@@ -70,6 +45,7 @@ async function createFolderIfMissing(token: string, path: string): Promise<void>
     }
   }
 }
+
 async function uploadTextIfMissing(token: string, path: string, content: string): Promise<void> {
   const r = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method: 'POST',
@@ -87,6 +63,7 @@ async function uploadTextIfMissing(token: string, path: string, content: string)
     }
   }
 }
+
 async function getOrCreateSharedLink(token: string, path: string): Promise<string> {
   const r = await dbPost(token, 'sharing/create_shared_link_with_settings', {
     path,
@@ -124,12 +101,14 @@ async function handleFolder(req: any, res: any, token: string) {
   try {
     if (root) await createFolderIfMissing(token, root);
     await createFolderIfMissing(token, oppFolder);
-    await createFolderIfMissing(token, `${oppFolder}/Photos`);
-    await createFolderIfMissing(token, `${oppFolder}/Sketches`);
-    await uploadTextIfMissing(token, `${oppFolder}/measurements.md`,
-      `# Measurements — ${safeName}\n\n| Label | Value |\n|-------|-------|\n`);
-    await uploadTextIfMissing(token, `${oppFolder}/site-notes.md`,
-      `# Site Notes — ${safeName}\n\n`);
+    await Promise.all([
+      createFolderIfMissing(token, `${oppFolder}/Photos`),
+      createFolderIfMissing(token, `${oppFolder}/Sketches`),
+      uploadTextIfMissing(token, `${oppFolder}/measurements.md`,
+        `# Measurements — ${safeName}\n\n| Label | Value |\n|-------|-------|\n`),
+      uploadTextIfMissing(token, `${oppFolder}/site-notes.md`,
+        `# Site Notes — ${safeName}\n\n`),
+    ]);
     const folderUrl = await getOrCreateSharedLink(token, oppFolder);
     return res.status(200).json({ folderUrl, created: true });
   } catch (err) {
@@ -138,23 +117,22 @@ async function handleFolder(req: any, res: any, token: string) {
   }
 }
 
-// ── folder-stats: count files and check template docs ─────────────────────
-
 async function countFiles(token: string, path: string): Promise<number> {
   const r = await dbPost(token, 'files/list_folder', { path, recursive: false });
   if (!r.ok) {
     const err = await readErrorBody(r);
-    if (err.error_summary?.includes('not_found') || err.error_summary?.includes('path/not_found')) return 0;
+    if (isNotFoundError(err.error_summary as string | undefined)) return 0;
     throw new Error(`list_folder failed for "${path}": ${JSON.stringify(err)}`);
   }
   const data = await r.json() as { entries: Array<{ '.tag': string }> };
   return data.entries.filter((e) => e['.tag'] === 'file').length;
 }
+
 async function fileExists(token: string, path: string): Promise<boolean> {
   const r = await dbPost(token, 'files/get_metadata', { path });
   if (r.ok) return true;
   const err = await readErrorBody(r);
-  if (err.error_summary?.includes('not_found') || err.error_summary?.includes('path/not_found')) return false;
+  if (isNotFoundError(err.error_summary as string | undefined)) return false;
   throw new Error(`get_metadata failed for "${path}": ${JSON.stringify(err)}`);
 }
 
@@ -181,8 +159,6 @@ async function handleFolderStats(req: any, res: any, token: string) {
     return res.status(500).json({ error: 'Failed to get folder stats', detail: String(err) });
   }
 }
-
-// ── photos: list photos with temporary download links ─────────────────────
 
 interface DropboxEntry {
   '.tag': string;
@@ -247,8 +223,6 @@ async function handlePhotos(req: any, res: any, token: string) {
   photos.sort((a, b) => b.filename.localeCompare(a.filename));
   return res.status(200).json({ photos });
 }
-
-// ── upload: multipart binary file upload ──────────────────────────────────
 
 function indexOfBuffer(haystack: Buffer, needle: Buffer, start = 0): number {
   for (let i = start; i <= haystack.length - needle.length; i++) {
@@ -328,8 +302,6 @@ async function handleUpload(req: any, res: any, token: string) {
   }
 }
 
-// ── file: delete a file ───────────────────────────────────────────────────
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleFile(req: any, res: any, token: string) {
   if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
@@ -353,8 +325,6 @@ async function handleFile(req: any, res: any, token: string) {
     return res.status(500).json({ error: 'Delete failed', detail: String(err) });
   }
 }
-
-// ── append-md: append text to a markdown file ─────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleAppendMd(req: any, res: any, token: string) {
@@ -402,11 +372,9 @@ async function handleAppendMd(req: any, res: any, token: string) {
   }
 }
 
-// ── main dispatcher ────────────────────────────────────────────────────────
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
-  const token = getToken(req.headers['cookie']);
+  const token = getToken(req.headers['cookie'], 'db_token');
   if (!token) return res.status(401).json({ error: 'Not authenticated', code: 'UNAUTHENTICATED' });
 
   const { action } = req.query as { action?: string };

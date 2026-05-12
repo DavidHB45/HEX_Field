@@ -1,37 +1,10 @@
-import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
+import { parseCookies, sealCookie, unsealCookie, TOKEN_MAX_AGE_SECONDS } from './_utils';
 
 const AT_PKCE = 'at_pkce';
 const AT_TOKEN = 'at_token';
 const DB_STATE = 'db_state';
 const DB_TOKEN = 'db_token';
-
-function deriveKey(secret: string) {
-  return createHash('sha256').update(secret).digest();
-}
-function sealCookie(data: unknown, secret: string): string {
-  const key = deriveKey(secret);
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const enc = Buffer.concat([cipher.update(JSON.stringify(data), 'utf8'), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), enc]).toString('base64url');
-}
-function unsealCookie<T>(sealed: string, secret: string): T {
-  const key = deriveKey(secret);
-  const buf = Buffer.from(sealed, 'base64url');
-  const decipher = createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12));
-  decipher.setAuthTag(buf.subarray(12, 28));
-  const json = Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString('utf8');
-  return JSON.parse(json) as T;
-}
-function parseCookies(header: string | undefined): Record<string, string> {
-  if (!header) return {};
-  return Object.fromEntries(
-    header.split(';').map((c) => {
-      const [k, ...v] = c.trim().split('=');
-      return [k.trim(), decodeURIComponent(v.join('='))];
-    })
-  );
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function airtableLogin(req: any, res: any) {
@@ -107,7 +80,7 @@ async function airtableCallback(req: any, res: any) {
   );
   res.setHeader('Set-Cookie', [
     `${AT_PKCE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-    `${AT_TOKEN}=${sealed}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 24 * 60 * 60}`,
+    `${AT_TOKEN}=${sealed}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TOKEN_MAX_AGE_SECONDS}`,
   ]);
   return res.redirect('/');
 }
@@ -178,7 +151,7 @@ async function dropboxCallback(req: any, res: any) {
   );
   res.setHeader('Set-Cookie', [
     `${DB_STATE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-    `${DB_TOKEN}=${sealed}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 24 * 60 * 60}`,
+    `${DB_TOKEN}=${sealed}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TOKEN_MAX_AGE_SECONDS}`,
   ]);
   return res.redirect('/');
 }
