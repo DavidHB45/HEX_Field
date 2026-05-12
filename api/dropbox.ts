@@ -224,6 +224,60 @@ async function handlePhotos(req: any, res: any, token: string) {
   return res.status(200).json({ photos });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleSketches(req: any, res: any, token: string) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const { opportunityName } = req.query as { opportunityName?: string };
+  if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName' });
+
+  const root = (process.env.DROPBOX_ROOT_FOLDER ?? '/Current Opportunities').replace(/\/$/, '');
+  const folderPath = `${root}/${opportunityName}/Sketches`;
+
+  let entries: DropboxEntry[] = [];
+  try {
+    const listRes = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: folderPath, limit: 200 }),
+    });
+    if (!listRes.ok) {
+      const err = await listRes.json() as { error_summary?: string };
+      if (err.error_summary?.startsWith('path/not_found')) return res.status(200).json({ sketches: [] });
+      console.error('[dropbox/sketches] list_folder error', listRes.status, err);
+      return res.status(500).json({ error: 'Failed to list sketches', detail: JSON.stringify(err) });
+    }
+    const listData = await listRes.json() as { entries: DropboxEntry[] };
+    entries = listData.entries.filter((e) => e['.tag'] === 'file' && /\.png$/i.test(e.name));
+  } catch (err) {
+    console.error('[dropbox/sketches] list_folder', err);
+    return res.status(500).json({ error: 'Failed to list sketches', detail: String(err) });
+  }
+
+  const sketches: { filename: string; path: string; url: string }[] = [];
+  const BATCH = 10;
+  for (let i = 0; i < entries.length; i += BATCH) {
+    const batch = entries.slice(i, i + BATCH);
+    const results = await Promise.allSettled(
+      batch.map(async (entry) => {
+        const r = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: entry.path_display }),
+        });
+        if (!r.ok) throw new Error(`get_temporary_link failed for ${entry.name}`);
+        const data = await r.json() as { link: string };
+        return { filename: entry.name, path: entry.path_display, url: data.link };
+      })
+    );
+    for (const result of results) {
+      if (result.status === 'fulfilled') sketches.push(result.value);
+    }
+  }
+
+  sketches.sort((a, b) => b.filename.localeCompare(a.filename));
+  return res.status(200).json({ sketches });
+}
+
 function indexOfBuffer(haystack: Buffer, needle: Buffer, start = 0): number {
   for (let i = start; i <= haystack.length - needle.length; i++) {
     if (haystack.subarray(i, i + needle.length).equals(needle)) return i;
@@ -383,6 +437,7 @@ export default async function handler(req: any, res: any) {
     case 'folder':       return handleFolder(req, res, token);
     case 'folder-stats': return handleFolderStats(req, res, token);
     case 'photos':       return handlePhotos(req, res, token);
+    case 'sketches':     return handleSketches(req, res, token);
     case 'upload':       return handleUpload(req, res, token);
     case 'file':         return handleFile(req, res, token);
     case 'append-md':    return handleAppendMd(req, res, token);
