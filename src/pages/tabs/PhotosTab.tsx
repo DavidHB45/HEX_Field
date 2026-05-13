@@ -18,7 +18,6 @@ interface UploadItem {
   filename: string;
   previewUrl: string;
   blob: Blob;
-  dropboxPath: string;
   status: UploadStatus;
   error?: string;
 }
@@ -35,6 +34,7 @@ interface PhotosTabProps {
   lastSiteVisit: string | undefined;
   dropboxAuthRequired: boolean;
   onOppFieldsUpdate: (fields: { 'Photos Count'?: number; 'Last Site Visit'?: string }) => void;
+  onAuthError?: () => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -256,6 +256,7 @@ export function PhotosTab({
   lastSiteVisit,
   dropboxAuthRequired,
   onOppFieldsUpdate,
+  onAuthError,
 }: PhotosTabProps) {
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -273,6 +274,7 @@ export function PhotosTab({
     try {
       const params = new URLSearchParams({ opportunityName });
       const res = await fetch(`/api/dropbox/photos?${params}`);
+      if (res.status === 401) { onAuthError?.(); return; }
       if (!res.ok) {
         const body = await res.json() as { error?: string };
         throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -286,7 +288,7 @@ export function PhotosTab({
     } finally {
       setLoadingRemote(false);
     }
-  }, [opportunityName, showToast]);
+  }, [opportunityName, showToast, onAuthError]);
 
   useEffect(() => {
     if (!dropboxAuthRequired) fetchRemotePhotos();
@@ -298,10 +300,14 @@ export function PhotosTab({
 
     try {
       const form = new FormData();
-      form.append('targetPath', item.dropboxPath);
+      // Server constructs the full Dropbox path from these semantic fields.
+      form.append('opportunityName', opportunityName);
+      form.append('subFolder', 'Photos');
+      form.append('filename', item.filename);
       form.append('file', item.blob, item.filename);
 
       const res = await fetch('/api/dropbox/upload', { method: 'POST', body: form });
+      if (res.status === 401) { onAuthError?.(); throw new Error('Session expired — reconnect Dropbox'); }
       if (!res.ok) {
         const body = await res.json() as { error?: string; detail?: string };
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`);
@@ -316,7 +322,7 @@ export function PhotosTab({
       showToast('error', `Upload failed: ${item.filename}`);
       return false;
     }
-  }, [showToast]);
+  }, [opportunityName, showToast, onAuthError]);
 
   // ── Process the upload queue sequentially ───────────────────────────────────
   const drainQueue = useCallback(
@@ -391,15 +397,12 @@ export function PhotosTab({
         const filename = buildFilename(gps);
         // Ensure unique filenames if multiple photos taken at same millisecond
         const uniqueFilename = i === 0 ? filename : filename.replace('.jpg', `_${i}.jpg`);
-        const root = (import.meta.env.VITE_DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\//, '').replace(/\/$/, '');
-        const dropboxPath = `/${root}/${opportunityName}/Photos/${uniqueFilename}`;
         const previewUrl = URL.createObjectURL(blob);
         return {
           id: `${Date.now()}_${i}`,
           filename: uniqueFilename,
           previewUrl,
           blob,
-          dropboxPath,
           status: 'pending' as const,
         };
       });

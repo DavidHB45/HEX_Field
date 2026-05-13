@@ -4,6 +4,29 @@ import { getToken, getTokenData, refreshDropboxToken, sealCookie, TOKEN_MAX_AGE_
 // Upload requires raw body; disable Vercel's parser globally and parse manually elsewhere.
 export const config = { api: { bodyParser: false } };
 
+// ─── Path helpers ─────────────────────────────────────────────────────────────
+
+function getRoot(): string {
+  return ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
+}
+
+function safeName(opportunityName: string): string {
+  return opportunityName.trim().replace(/\//g, '-');
+}
+
+const FILE_TYPE_MAP: Record<string, string> = {
+  'site-notes': 'site-notes.md',
+  'measurements': 'measurements.md',
+};
+
+function resolveFilePath(opportunityName: string, fileType: string): string | null {
+  const fileName = FILE_TYPE_MAP[fileType];
+  if (!fileName) return null;
+  return `${getRoot()}/${safeName(opportunityName)}/${fileName}`;
+}
+
+// ─── Low-level Dropbox helpers ────────────────────────────────────────────────
+
 async function dbPost(token: string, endpoint: string, body: unknown): Promise<Response> {
   return fetch(`https://api.dropboxapi.com/2/${endpoint}`, {
     method: 'POST',
@@ -88,15 +111,17 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
   throw new Error(`Could not get or create shared link for "${path}": ${JSON.stringify(err)}`);
 }
 
+// ─── Route handlers ───────────────────────────────────────────────────────────
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleFolder(req: any, res: any, token: string) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { opportunityName } = await readJsonBody<{ opportunityName?: string }>(req);
   if (!opportunityName?.trim()) return res.status(400).json({ error: 'opportunityName required' });
 
-  const safeName = opportunityName.trim().replace(/\//g, '-');
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
-  const oppFolder = `${root}/${safeName}`;
+  const name = safeName(opportunityName);
+  const root = getRoot();
+  const oppFolder = `${root}/${name}`;
 
   try {
     if (root) await createFolderIfMissing(token, root);
@@ -105,9 +130,9 @@ async function handleFolder(req: any, res: any, token: string) {
       createFolderIfMissing(token, `${oppFolder}/Photos`),
       createFolderIfMissing(token, `${oppFolder}/Sketches`),
       uploadTextIfMissing(token, `${oppFolder}/measurements.md`,
-        `# Measurements — ${safeName}\n\n`),
+        `# Measurements — ${name}\n\n`),
       uploadTextIfMissing(token, `${oppFolder}/site-notes.md`,
-        `# Site Notes — ${safeName}\n\n`),
+        `# Site Notes — ${name}\n\n`),
     ]);
     const folderUrl = await getOrCreateSharedLink(token, oppFolder);
     return res.status(200).json({ folderUrl, created: true });
@@ -142,9 +167,9 @@ async function handleFolderStats(req: any, res: any, token: string) {
   const { opportunityName } = req.query as { opportunityName?: string };
   if (!opportunityName?.trim()) return res.status(400).json({ error: 'opportunityName required' });
 
-  const safeName = opportunityName.trim().replace(/\//g, '-');
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
-  const oppFolder = `${root}/${safeName}`;
+  const name = safeName(opportunityName);
+  const root = getRoot();
+  const oppFolder = `${root}/${name}`;
 
   try {
     const [photos, sketches, measurementsExists, notesExists] = await Promise.all([
@@ -174,8 +199,7 @@ async function handlePhotos(req: any, res: any, token: string) {
   const { opportunityName } = req.query as { opportunityName?: string };
   if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName' });
 
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
-  const folderPath = `${root}/${opportunityName}/Photos`;
+  const folderPath = `${getRoot()}/${safeName(opportunityName)}/Photos`;
 
   let entries: DropboxEntry[] = [];
   try {
@@ -230,8 +254,7 @@ async function handleSketches(req: any, res: any, token: string) {
   const { opportunityName } = req.query as { opportunityName?: string };
   if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName' });
 
-  const root = ('/' + (process.env.DROPBOX_ROOT_FOLDER ?? '01 - Operations/1. Project Opportunites/1. Current Opportunities').replace(/^\/+/, '')).replace(/\/$/, '');
-  const folderPath = `${root}/${opportunityName}/Sketches`;
+  const folderPath = `${getRoot()}/${safeName(opportunityName)}/Sketches`;
 
   let entries: DropboxEntry[] = [];
   try {
@@ -327,11 +350,21 @@ async function handleUpload(req: any, res: any, token: string) {
 
   const body = await readRawBody(req as IncomingMessage);
   const parts = parseMultipart(body, boundary);
-  const targetPath = parts['targetPath']?.data.toString('utf8').trim();
+
+  // Client sends opportunityName + subFolder + filename; server constructs the full Dropbox path.
+  const opportunityName = parts['opportunityName']?.data.toString('utf8').trim();
+  const subFolder = parts['subFolder']?.data.toString('utf8').trim();
+  const filename = parts['filename']?.data.toString('utf8').trim();
   const file = parts['file'];
 
-  if (!targetPath) return res.status(400).json({ error: 'Missing targetPath field' });
+  if (!opportunityName) return res.status(400).json({ error: 'Missing opportunityName field' });
+  if (!subFolder || !['Photos', 'Sketches'].includes(subFolder)) {
+    return res.status(400).json({ error: 'subFolder must be Photos or Sketches' });
+  }
+  if (!filename) return res.status(400).json({ error: 'Missing filename field' });
   if (!file?.data?.length) return res.status(400).json({ error: 'Missing file field' });
+
+  const targetPath = `${getRoot()}/${safeName(opportunityName)}/${subFolder}/${filename}`;
 
   try {
     const r = await fetch('https://content.dropboxapi.com/2/files/upload', {
@@ -358,8 +391,35 @@ async function handleUpload(req: any, res: any, token: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleFile(req: any, res: any, token: string) {
-  const { path } = req.query as { path?: string };
-  if (!path) return res.status(400).json({ error: 'Missing path query parameter' });
+  // DELETE uses a server-generated path (from listing); GET and PUT use opportunityName+fileType.
+  if (req.method === 'DELETE') {
+    const { path } = req.query as { path?: string };
+    if (!path) return res.status(400).json({ error: 'Missing path query parameter' });
+    try {
+      const r = await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.error('[dropbox/file] delete error', r.status, err);
+        return res.status(500).json({ error: 'Dropbox delete failed', detail: err });
+      }
+      return res.status(200).json({ deleted: true });
+    } catch (err) {
+      console.error('[dropbox/file] DELETE', err);
+      return res.status(500).json({ error: 'Delete failed', detail: String(err) });
+    }
+  }
+
+  // GET and PUT: compute path server-side from opportunityName + fileType
+  const { opportunityName, fileType } = req.query as { opportunityName?: string; fileType?: string };
+  if (!opportunityName?.trim() || !fileType) {
+    return res.status(400).json({ error: 'opportunityName and fileType required' });
+  }
+  const path = resolveFilePath(opportunityName.trim(), fileType);
+  if (!path) return res.status(400).json({ error: `Unknown fileType: ${fileType}` });
 
   if (req.method === 'GET') {
     try {
@@ -405,25 +465,6 @@ async function handleFile(req: any, res: any, token: string) {
     }
   }
 
-  if (req.method === 'DELETE') {
-    try {
-      const r = await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      });
-      if (!r.ok) {
-        const err = await r.text();
-        console.error('[dropbox/file] delete error', r.status, err);
-        return res.status(500).json({ error: 'Dropbox delete failed', detail: err });
-      }
-      return res.status(200).json({ deleted: true });
-    } catch (err) {
-      console.error('[dropbox/file]', err);
-      return res.status(500).json({ error: 'Delete failed', detail: String(err) });
-    }
-  }
-
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
@@ -432,11 +473,17 @@ const MEASUREMENTS_TABLE_HEADER = '| Label | Value | Timestamp |\n| --- | --- | 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleAppendMd(req: any, res: any, token: string) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { filePath, text } = await readJsonBody<{ filePath?: string; text?: string }>(req);
-  if (!filePath?.trim()) return res.status(400).json({ error: 'filePath required' });
+  const { opportunityName, fileType, text } =
+    await readJsonBody<{ opportunityName?: string; fileType?: string; text?: string }>(req);
+
+  if (!opportunityName?.trim()) return res.status(400).json({ error: 'opportunityName required' });
+  if (!fileType) return res.status(400).json({ error: 'fileType required' });
   if (!text?.trim()) return res.status(400).json({ error: 'text required' });
 
-  const isMeasurements = filePath.endsWith('measurements.md');
+  const filePath = resolveFilePath(opportunityName.trim(), fileType);
+  if (!filePath) return res.status(400).json({ error: `Unknown fileType: ${fileType}` });
+
+  const isMeasurements = fileType === 'measurements';
 
   try {
     const downloadRes = await fetch('https://content.dropboxapi.com/2/files/download', {
